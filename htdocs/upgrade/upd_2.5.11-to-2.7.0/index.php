@@ -10,8 +10,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-use Xoops\Upgrade\XoopsUpgrade;
 use Xoops\Upgrade\UpgradeControl;
+use Xoops\Upgrade\XoopsUpgrade;
 
 /**
  * Upgrade from 2.5.11 to 2.7.0
@@ -52,6 +52,13 @@ class Upgrade_270 extends XoopsUpgrade
     protected string $widenedFieldNameSkipKey = 'normalize-profilefield-widened-270';
 
     /**
+     * @var string Session key set when apply_cleanuplibraries could not delete
+     *             every obsolete item and warned the admin to delete them by hand.
+     *             Read by check_ so the leftover files do not block the upgrade.
+     */
+    protected string $librariesCleanupWarnedKey = 'cleanuplibraries-warned-270';
+
+    /**
      * @param XoopsMySQLDatabase $db      database connection
      * @param UpgradeControl     $control upgrade control instance
      */
@@ -74,7 +81,7 @@ class Upgrade_270 extends XoopsUpgrade
             'normalizeprofilefieldname',
             'normalizeprofileregstepsort',
         ];
-        $this->usedFiles = [];
+        $this->usedFiles    = [];
         $this->pathsToCheck = [
             XOOPS_ROOT_PATH . '/class/mail/phpmailer',
             XOOPS_TRUST_PATH . '/modules/protector/library',
@@ -143,10 +150,10 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function check_createtokenstable(): bool
     {
-        $table  = $this->db->prefix('tokens');
-        $sql    = "SELECT 1 FROM `information_schema`.`TABLES`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " LIMIT 1";
+        $table = $this->db->prefix('tokens');
+        $sql   = "SELECT 1 FROM `information_schema`.`TABLES`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -190,11 +197,11 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function check_widenbannerclientpasswd(): bool
     {
-        $table  = $this->db->prefix('bannerclient');
-        $sql    = "SELECT CHARACTER_MAXIMUM_LENGTH FROM `information_schema`.`COLUMNS`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " AND `COLUMN_NAME` = 'passwd' LIMIT 1";
+        $table = $this->db->prefix('bannerclient');
+        $sql   = "SELECT CHARACTER_MAXIMUM_LENGTH FROM `information_schema`.`COLUMNS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " AND `COLUMN_NAME` = 'passwd' LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -242,7 +249,7 @@ class Upgrade_270 extends XoopsUpgrade
 
         // Check SameSite options exist (Lax, Strict, None)
         $sql = "SELECT COUNT(*) FROM `" . $this->db->prefix('configoption') . "` co"
-            . " INNER JOIN `" . $this->db->prefix('config') . "` c ON co.conf_id = c.conf_id"
+        . " INNER JOIN `" . $this->db->prefix('config') . "` c ON co.conf_id = c.conf_id"
             . " WHERE c.conf_name = 'session_cookie_samesite' AND c.conf_modid = 0";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
@@ -263,11 +270,11 @@ class Upgrade_270 extends XoopsUpgrade
         $optionTable = $this->db->prefix('configoption');
 
         // Insert SameSite preference (skip if exists)
-        $sql = "SELECT conf_id FROM `{$configTable}` WHERE conf_name = 'session_cookie_samesite' AND conf_modid = 0";
-        $result = $this->db->query($sql);
+        $sql         = "SELECT conf_id FROM `{$configTable}` WHERE conf_name = 'session_cookie_samesite' AND conf_modid = 0";
+        $result      = $this->db->query($sql);
         $sameSiteRow = ($this->db->isResultSet($result) && ($result instanceof \mysqli_result))
-            ? $this->db->fetchRow($result)
-            : false;
+        ? $this->db->fetchRow($result)
+        : false;
 
         if (!$sameSiteRow) {
             $sql = "INSERT INTO `{$configTable}` (conf_modid, conf_catid, conf_name, conf_title, conf_value, conf_desc, conf_formtype, conf_valuetype, conf_order) VALUES (0, 1, 'session_cookie_samesite', '_MD_AM_SESSSAMESITE', 'Lax', '_MD_AM_SESSSAMESITE_DSC', 'select', 'text', 43)";
@@ -291,11 +298,11 @@ class Upgrade_270 extends XoopsUpgrade
         }
 
         // Insert Secure preference (skip if exists)
-        $sql    = "SELECT conf_id FROM `{$configTable}` WHERE conf_name = 'session_cookie_secure' AND conf_modid = 0";
-        $result = $this->db->query($sql);
+        $sql       = "SELECT conf_id FROM `{$configTable}` WHERE conf_name = 'session_cookie_secure' AND conf_modid = 0";
+        $result    = $this->db->query($sql);
         $secureRow = ($this->db->isResultSet($result) && ($result instanceof \mysqli_result))
-            ? $this->db->fetchRow($result)
-            : false;
+        ? $this->db->fetchRow($result)
+        : false;
 
         if (!$secureRow) {
             $sql = "INSERT INTO `{$configTable}` (conf_modid, conf_catid, conf_name, conf_title, conf_value, conf_desc, conf_formtype, conf_valuetype, conf_order) VALUES (0, 1, 'session_cookie_secure', '_MD_AM_SESSSECURE', '0', '_MD_AM_SESSSECURE_DSC', 'yesno', 'int', 44)";
@@ -336,10 +343,10 @@ class Upgrade_270 extends XoopsUpgrade
     {
         // Check config.conf_id (parent PK)
         $configTable = $this->db->prefix('config');
-        $sql = "SELECT DATA_TYPE FROM `information_schema`.`COLUMNS`"
-             . " WHERE `TABLE_SCHEMA` = DATABASE()"
-             . " AND `TABLE_NAME` = " . $this->db->quote($configTable)
-             . " AND `COLUMN_NAME` = 'conf_id' LIMIT 1";
+        $sql         = "SELECT DATA_TYPE FROM `information_schema`.`COLUMNS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($configTable)
+            . " AND `COLUMN_NAME` = 'conf_id' LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -351,10 +358,10 @@ class Upgrade_270 extends XoopsUpgrade
 
         // Check configoption.conf_id (FK child) — must ALSO be int
         $optionTable = $this->db->prefix('configoption');
-        $sql = "SELECT DATA_TYPE FROM `information_schema`.`COLUMNS`"
-             . " WHERE `TABLE_SCHEMA` = DATABASE()"
-             . " AND `TABLE_NAME` = " . $this->db->quote($optionTable)
-             . " AND `COLUMN_NAME` = 'conf_id' LIMIT 1";
+        $sql         = "SELECT DATA_TYPE FROM `information_schema`.`COLUMNS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($optionTable)
+            . " AND `COLUMN_NAME` = 'conf_id' LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -399,11 +406,11 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function check_widenimagename(): bool
     {
-        $table  = $this->db->prefix('image');
-        $sql    = "SELECT CHARACTER_MAXIMUM_LENGTH FROM `information_schema`.`COLUMNS`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " AND `COLUMN_NAME` = 'image_name' LIMIT 1";
+        $table = $this->db->prefix('image');
+        $sql   = "SELECT CHARACTER_MAXIMUM_LENGTH FROM `information_schema`.`COLUMNS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " AND `COLUMN_NAME` = 'image_name' LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -472,20 +479,31 @@ class Upgrade_270 extends XoopsUpgrade
     public function check_cleanuplibraries(): bool
     {
         $basePath = XOOPS_ROOT_PATH . '/class/libraries/';
+        $clean    = true;
         foreach ($this->librariesTopLevel as $item) {
             if (file_exists($basePath . $item)) {
-                return false;
+                $clean = false;
+                break;
             }
         }
 
-        $vendorPath = $basePath . 'vendor/';
-        foreach ($this->librariesObsoleteVendors as $item) {
-            if (file_exists($vendorPath . $item)) {
-                return false;
+        if ($clean) {
+            $vendorPath = $basePath . 'vendor/';
+            foreach ($this->librariesObsoleteVendors as $item) {
+                if (file_exists($vendorPath . $item)) {
+                    $clean = false;
+                    break;
+                }
             }
         }
 
-        return true;
+        if ($clean) {
+            unset($_SESSION[$this->librariesCleanupWarnedKey]); // genuinely clean — drop any stale warn flag
+            return true;
+        }
+
+        // Leftovers remain: pass once apply_ has warned this session, so the queue can finish.
+        return !empty($_SESSION[$this->librariesCleanupWarnedKey]);
     }
 
     /**
@@ -495,7 +513,10 @@ class Upgrade_270 extends XoopsUpgrade
      * The entire class/libraries/ tree is removed, including vendor/composer/
      * and vendor/firebase/ which are now redundant.
      *
-     * @return bool true on success (best-effort — continues on individual item failure)
+     * Best-effort: an item that cannot be deleted is reported as a warning
+     * asking the admin to delete it by hand, and does not fail the patch.
+     *
+     * @return bool always true
      */
     public function apply_cleanuplibraries(): bool
     {
@@ -508,13 +529,13 @@ class Upgrade_270 extends XoopsUpgrade
             $path = $basePath . $item;
             if (is_dir($path)) {
                 if (!self::deleteFolder($path)) {
-                    $this->logs[] = sprintf('無法刪除目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
-                    $success = false;
+                    $this->logs[] = sprintf('無法刪除目錄：%s(此為已無用的舊檔案，請手動刪除)', $this->relativePath($path));
+                    $success      = false;
                 }
             } elseif (is_file($path)) {
                 if (!unlink($path)) {
-                    $this->logs[] = sprintf('無法刪除檔案:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
-                    $success = false;
+                    $this->logs[] = sprintf('無法刪除檔案：%s(此為已無用的舊檔案，請手動刪除)', $this->relativePath($path));
+                    $success      = false;
                 }
             }
             // Item doesn't exist — already cleaned, skip silently
@@ -525,13 +546,13 @@ class Upgrade_270 extends XoopsUpgrade
             $path = $vendorPath . $item;
             if (is_dir($path)) {
                 if (!self::deleteFolder($path)) {
-                    $this->logs[] = sprintf('無法刪除 vendor 目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
-                    $success = false;
+                    $this->logs[] = sprintf('無法刪除 vendor 目錄：%s(此為已無用的舊檔案，請自行手動刪除)', $this->relativePath($path));
+                    $success      = false;
                 }
             } elseif (is_file($path)) {
                 if (!unlink($path)) {
-                    $this->logs[] = sprintf('無法刪除 vendor 檔案:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
-                    $success = false;
+                    $this->logs[] = sprintf('無法刪除 vendor 檔案：%s(此為已無用的舊檔案，請自行手動刪除)', $this->relativePath($path));
+                    $success      = false;
                 }
             }
         }
@@ -541,12 +562,15 @@ class Upgrade_270 extends XoopsUpgrade
         if ($success) {
             foreach ([$vendorPath, $basePath] as $emptyDir) {
                 if (!$this->removeLeftover($emptyDir)) {
-                    $this->logs[] = sprintf('無法移除目錄(可能仍有檔案):%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($emptyDir));
+                    $this->logs[] = sprintf('無法移除目錄(可能仍有檔案)：%s(此為已無用的舊檔案，請自行手動刪除)', $this->relativePath($emptyDir));
                 }
             }
+        } else {
+            $_SESSION[$this->librariesCleanupWarnedKey] = true; // warned once; queue may complete
+            $this->logs[] = '<span class="text-warning">警告：部分已無用的舊檔案無法自動刪除，不影響升級繼續進行。升級完成後，請自行手動刪除 htdocs/class/libraries/ 目錄。</span>';
         }
 
-        return $success;
+        return true;
     }
 
     // =========================================================================
@@ -575,7 +599,7 @@ class Upgrade_270 extends XoopsUpgrade
     {
         $path = XOOPS_ROOT_PATH . '/class/xoopseditor/tinymce5/tinymce5/';
         if (!self::deleteFolder($path)) {
-            $this->logs[] = sprintf('無法刪除重複的 tinymce5 目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
+            $this->logs[] = sprintf('無法刪除重複的 tinymce5 目錄：%s(此為已無用的舊檔案，請自行手動刪除)', $this->relativePath($path));
             return false;
         }
         return true;
@@ -607,7 +631,7 @@ class Upgrade_270 extends XoopsUpgrade
     {
         $path = XOOPS_ROOT_PATH . '/class/textsanitizer/flash/';
         if (!self::deleteFolder($path)) {
-            $this->logs[] = sprintf('無法刪除 Flash 文字過濾目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
+            $this->logs[] = sprintf('無法刪除 Flash 文字過濾目錄：%s(此為已無用的舊檔案，請自行手動刪除)', $this->relativePath($path));
             return false;
         }
         return true;
@@ -661,11 +685,11 @@ class Upgrade_270 extends XoopsUpgrade
         }
 
         // Column must be varchar(64) NOT NULL DEFAULT ''
-        $sql    = "SELECT `DATA_TYPE`, `CHARACTER_MAXIMUM_LENGTH`, `IS_NULLABLE`, `COLUMN_DEFAULT`"
-                . " FROM `information_schema`.`COLUMNS`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " AND `COLUMN_NAME` = 'field_name' LIMIT 1";
+        $sql = "SELECT `DATA_TYPE`, `CHARACTER_MAXIMUM_LENGTH`, `IS_NULLABLE`, `COLUMN_DEFAULT`"
+        . " FROM `information_schema`.`COLUMNS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " AND `COLUMN_NAME` = 'field_name' LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -686,7 +710,7 @@ class Upgrade_270 extends XoopsUpgrade
                     return false;
                 }
                 if ($maxStoredLength > 64) {
-                    return true;  // still widened with overlong data — defer to manual action
+                    return true; // still widened with overlong data — defer to manual action
                 }
             }
             unset($_SESSION[$this->widenedFieldNameSkipKey]);
@@ -696,19 +720,19 @@ class Upgrade_270 extends XoopsUpgrade
             || 'varchar' !== strtolower((string) $row[0])
             || 64 !== (int) $row[1]
             || 'NO' !== strtoupper((string) $row[2])
-            || '' !== self::normaliseColumnDefault($row[3])  // reject NULL default
+            || '' !== self::normaliseColumnDefault($row[3]) // reject NULL default
         ) {
             return false;
         }
 
         // Unique index `field_name` must be the sole, single-column entry
         // with SUB_PART = 64 and NON_UNIQUE = 0.
-        $sql    = "SELECT `COLUMN_NAME`, `SEQ_IN_INDEX`, `SUB_PART`, `NON_UNIQUE`"
-                . " FROM `information_schema`.`STATISTICS`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " AND `INDEX_NAME` = 'field_name'"
-                . " ORDER BY `SEQ_IN_INDEX`";
+        $sql = "SELECT `COLUMN_NAME`, `SEQ_IN_INDEX`, `SUB_PART`, `NON_UNIQUE`"
+        . " FROM `information_schema`.`STATISTICS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " AND `INDEX_NAME` = 'field_name'"
+            . " ORDER BY `SEQ_IN_INDEX`";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -733,9 +757,9 @@ class Upgrade_270 extends XoopsUpgrade
         $subPart = $rows[0][2];
 
         return 'field_name' === $rows[0][0]
-            && 1 === (int) $rows[0][1]
-            && (null === $subPart || 64 === (int) $subPart)
-            && 0 === (int) $rows[0][3];
+        && 1 === (int) $rows[0][1]
+        && (null === $subPart || 64 === (int) $subPart)
+        && 0 === (int) $rows[0][3];
     }
 
     /**
@@ -771,11 +795,11 @@ class Upgrade_270 extends XoopsUpgrade
         }
 
         // Step 1: Ensure the column is varchar(64) NOT NULL DEFAULT ''.
-        $sql    = "SELECT `DATA_TYPE`, `CHARACTER_MAXIMUM_LENGTH`, `IS_NULLABLE`, `COLUMN_DEFAULT`"
-                . " FROM `information_schema`.`COLUMNS`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " AND `COLUMN_NAME` = 'field_name' LIMIT 1";
+        $sql = "SELECT `DATA_TYPE`, `CHARACTER_MAXIMUM_LENGTH`, `IS_NULLABLE`, `COLUMN_DEFAULT`"
+        . " FROM `information_schema`.`COLUMNS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " AND `COLUMN_NAME` = 'field_name' LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             $this->logs[] = \sprintf(_DB_QUERY_ERROR, $sql) . $this->db->error();
@@ -837,9 +861,9 @@ class Upgrade_270 extends XoopsUpgrade
         // MODIFY if any of the four column attributes diverge from the target:
         //   type = varchar, length = 64, NOT NULL, DEFAULT ''
         $columnDiverges = ('varchar' !== $dataType)
-                      || (64 !== $currentLen)
-                      || $isNullable
-                      || ('' !== $currentDefault);
+            || (64 !== $currentLen)
+            || $isNullable
+            || ('' !== $currentDefault);
         if ($columnDiverges) {
             // Guard 3: when the column is nullable and the UNIQUE index still
             // exists, multiple rows may legally share NULL (SQL treats NULL !=
@@ -850,7 +874,7 @@ class Upgrade_270 extends XoopsUpgrade
             // an actionable message when > 1 row would collide.
             if ($isNullable) {
                 $countSql = "SELECT COUNT(*) FROM `{$table}`"
-                          . " WHERE `field_name` IS NULL OR `field_name` = ''";
+                    . " WHERE `field_name` IS NULL OR `field_name` = ''";
                 $countResult = $this->db->query($countSql);
                 // Treat query failure as a hard error — falling through here
                 // would defeat the whole purpose of the pre-flight and let
@@ -860,7 +884,7 @@ class Upgrade_270 extends XoopsUpgrade
                     $this->logs[] = \sprintf(_DB_QUERY_ERROR, $countSql) . $this->db->error();
                     return false;
                 }
-                $countRow = $this->db->fetchRow($countResult);
+                $countRow      = $this->db->fetchRow($countResult);
                 $conflictCount = $countRow ? (int) $countRow[0] : 0;
                 if ($conflictCount > 1) {
                     $this->logs[] = sprintf(
@@ -883,8 +907,8 @@ class Upgrade_270 extends XoopsUpgrade
                     $currentLen,
                     $isNullable ? 'NULL' : 'NOT NULL',
                     null === $currentDefault
-                        ? 'NULL'
-                        : "'" . htmlspecialchars($currentDefault, ENT_QUOTES, 'UTF-8') . "'"
+                    ? 'NULL'
+                    : "'" . htmlspecialchars($currentDefault, ENT_QUOTES, 'UTF-8') . "'"
                 );
             }
             $alter = "ALTER TABLE `{$table}` MODIFY `field_name` varchar(64) NOT NULL DEFAULT ''";
@@ -943,12 +967,12 @@ class Upgrade_270 extends XoopsUpgrade
             return true;
         }
 
-        $sql    = "SELECT `COLUMN_NAME`, `SEQ_IN_INDEX`, `SUB_PART`, `NON_UNIQUE`"
-                . " FROM `information_schema`.`STATISTICS`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " AND `INDEX_NAME` = 'sort'"
-                . " ORDER BY `SEQ_IN_INDEX`";
+        $sql = "SELECT `COLUMN_NAME`, `SEQ_IN_INDEX`, `SUB_PART`, `NON_UNIQUE`"
+        . " FROM `information_schema`.`STATISTICS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " AND `INDEX_NAME` = 'sort'"
+            . " ORDER BY `SEQ_IN_INDEX`";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return false;
@@ -1169,10 +1193,10 @@ class Upgrade_270 extends XoopsUpgrade
      */
     private function tableExists(string $table): ?bool
     {
-        $sql    = "SELECT 1 FROM `information_schema`.`TABLES`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " LIMIT 1";
+        $sql = "SELECT 1 FROM `information_schema`.`TABLES`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+            . " LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return null;
@@ -1196,11 +1220,11 @@ class Upgrade_270 extends XoopsUpgrade
      */
     private function indexExists(string $table, string $indexName): ?bool
     {
-        $sql    = "SELECT 1 FROM `information_schema`.`STATISTICS`"
-                . " WHERE `TABLE_SCHEMA` = DATABASE()"
-                . " AND `TABLE_NAME` = " . $this->db->quote($table)
-                . " AND `INDEX_NAME` = " . $this->db->quote($indexName)
-                . " LIMIT 1";
+        $sql = "SELECT 1 FROM `information_schema`.`STATISTICS`"
+        . " WHERE `TABLE_SCHEMA` = DATABASE()"
+        . " AND `TABLE_NAME` = " . $this->db->quote($table)
+        . " AND `INDEX_NAME` = " . $this->db->quote($indexName)
+            . " LIMIT 1";
         $result = $this->db->query($sql);
         if (!$this->db->isResultSet($result) || !($result instanceof \mysqli_result)) {
             return null;
