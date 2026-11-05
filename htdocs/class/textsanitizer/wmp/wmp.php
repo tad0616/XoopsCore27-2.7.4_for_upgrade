@@ -1,0 +1,86 @@
+<?php
+/**
+ * TextSanitizer extension
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             class
+ * @subpackage          textsanitizer
+ * @since               2.3.0
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ */
+defined('XOOPS_ROOT_PATH') || exit('Restricted access');
+
+/**
+ * Class MytsWmp
+ */
+class MytsWmp extends MyTextSanitizerExtension
+{
+    /**
+     * @param $textarea_id
+     *
+     * @return array
+     */
+    public function encode($textarea_id)
+    {
+        $config     = parent::loadConfig(__DIR__);
+        if ($config['enable_wmp_entry'] === false) {
+            return [];
+        }
+
+        $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+        $code = "<button type='button' class='btn btn-default btn-sm' onclick='xoopsCodeWmp("
+            . json_encode((string) $textarea_id, $jsonFlags) . ","
+            . json_encode(_XOOPS_FORM_ENTERWMPURL, $jsonFlags) . ","
+            . json_encode(_XOOPS_FORM_ALT_ENTERHEIGHT, $jsonFlags) . ","
+            . json_encode(_XOOPS_FORM_ALT_ENTERWIDTH, $jsonFlags)
+            . ");' onmouseover='style.cursor=\"hand\"' title='" . htmlspecialchars(_XOOPS_FORM_ALTWMP, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . "'><span class='fa-brands fa-windows' aria-hidden='true'></span></button>";
+
+        $javascript = <<<EOH
+            function xoopsCodeWmp(id, enterWmpPhrase, enterWmpHeightPhrase, enterWmpWidthPhrase)
+            {
+                var selection = xoopsGetSelect(id);
+                if (selection.length > 0) {
+                    var text = selection;
+                } else {
+                    var text = prompt(enterWmpPhrase, "");
+                }
+                var domobj = xoopsGetElementById(id);
+                if (text.length > 0) {
+                    var text2 = prompt(enterWmpWidthPhrase, "480");
+                    var text3 = prompt(enterWmpHeightPhrase, "330");
+                    var result = "[wmp="+text2+","+text3+"]" + text + "[/wmp]";
+                    xoopsInsertText(domobj, result);
+                }
+                domobj.focus();
+            }
+EOH;
+
+        return [
+            $code,
+            $javascript,
+        ];
+    }
+
+    /**
+     * @param MyTextSanitizer $myts
+     */
+    public function load(MyTextSanitizer $myts)
+    {
+        $myts->patterns[] = "/\[wmp=(['\"]?)([^\"']*),([^\"']*)\\1]([^\"]*)\[\/wmp\]/sU";
+        $rp             = "<object classid=\"clsid:6BF52A52-394A-11D3-B153-00C04F79FAA6\" id=\"WindowsMediaPlayer\" width=\"\\2\" height=\"\\3\">\n";
+        $rp .= "<param name=\"URL\" value=\"\\4\">\n";
+        $rp .= "<param name=\"AutoStart\" value=\"0\">\n";
+        $rp .= "<embed autostart=\"0\" src=\"\\4\" type=\"video/x-ms-wmv\" width=\"\\2\" height=\"\\3\" controls=\"ImageWindow\" console=\"cons\"> </embed>";
+        $rp .= "</object>\n";
+        $myts->replacements[] = $rp;
+    }
+}

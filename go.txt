@@ -1,0 +1,11 @@
+full_copy(XOOPS_ROOT_PATH . "/uploads/tad_adm/upgrade/htdocs/", XOOPS_ROOT_PATH . "/");
+full_copy(XOOPS_ROOT_PATH . "/uploads/tad_adm/upgrade/xoops_data/", XOOPS_VAR_PATH . "/");
+full_copy(XOOPS_ROOT_PATH . "/uploads/tad_adm/upgrade/xoops_lib/", XOOPS_PATH . "/");
+chmod_R(XOOPS_ROOT_PATH , 0755, 0755);
+chmod_R(XOOPS_ROOT_PATH."/uploads" , 0777, 0777);
+chmod_R(XOOPS_VAR_PATH, 0777, 0777);
+chmod_R(XOOPS_ROOT_PATH . "/mainfile.php", 0777, 0777);
+delete_directory(XOOPS_ROOT_PATH . "/modules/system/themes/legacy");
+delete_directory(XOOPS_ROOT_PATH . "/uploads/tad_adm/upgrade");
+unlink($new_file);
+file_put_contents(XOOPS_ROOT_PATH . "/uploads/xoops_sn_{$xoops_sn}.txt", date('Y-m-d H:i:s'));

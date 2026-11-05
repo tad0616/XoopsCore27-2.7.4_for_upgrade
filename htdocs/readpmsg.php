@@ -1,0 +1,115 @@
+<?php
+/**
+ * XOOPS message list
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             core
+ * @since               2.0.0
+ */
+
+use Xmf\Request;
+
+include __DIR__ . '/mainfile.php';
+$xoopsPreload = XoopsPreload::getInstance();
+$xoopsPreload->triggerEvent('core.readpmsg.start');
+
+xoops_loadLanguage('pmsg');
+
+if (!is_object($xoopsUser)) {
+    redirect_header('user.php', 0);
+} else {
+    $pm_handler = xoops_getHandler('privmessage');
+    if (Request::getInt('delete', 0, 'POST') !== 0) {
+        if (!$GLOBALS['xoopsSecurity']->check()) {
+            echo implode('<br>', $GLOBALS['xoopsSecurity']->getErrors());
+            exit();
+        } elseif (Request::getInt('ok', 0, 'POST') === 0) {
+            include $GLOBALS['xoops']->path('header.php');
+            xoops_confirm(['ok' => 1, 'delete' => 1, 'msg_id' => Request::getInt('msg_id', 0, 'POST')], $_SERVER['REQUEST_URI'], _MD_PM_SURE_TO_DELETE);
+            include $GLOBALS['xoops']->path('footer.php');
+            exit();
+        }
+        $pm = $pm_handler->get(Request::getInt('msg_id', 0, 'POST'));
+        if (!is_object($pm) || $pm->getVar('to_userid') != $xoopsUser->getVar('uid') || !$pm_handler->delete($pm)) {
+            exit();
+        } else {
+            redirect_header('viewpmsg.php', 1, _MD_PM_DELETED);
+        }
+    }
+    $start          = Request::getInt('start', 0, 'GET');
+    $total_messages = Request::getInt('total_messages', 0, 'GET');
+    include $GLOBALS['xoops']->path('header.php');
+    $criteria = new Criteria('to_userid', $xoopsUser->getVar('uid'));
+    $criteria->setLimit(1);
+    $criteria->setStart($start);
+    $criteria->setSort('msg_time');
+    $pm_arr = $pm_handler->getObjects($criteria);
+    echo '<div><h4>' . _MD_PM_PRIVATEMESSAGE . "</h4></div><br><a href='userinfo.php?uid=" . $xoopsUser->getVar('uid') . "' title=''>" . _MD_PM_PROFILE . "</a>&nbsp;<span class='bold'>&raquo;</span>&nbsp;<a href='viewpmsg.php' title=''>" . _MD_PM_INBOX . "</a>&nbsp;<span class='bold'>&raquo;</span>&nbsp;\n";
+    if (empty($pm_arr)) {
+        echo '<br><br>' . _MD_PM_YOUDONTHAVE;
+    } else {
+        if (!$pm_handler->setRead($pm_arr[0])) {
+            //echo "failed";
+        }
+        echo $pm_arr[0]->getVar('subject') . "<br><form action='readpmsg.php' method='post' name='delete" . $pm_arr[0]->getVar('msg_id') . "'><table cellpadding='4' cellspacing='1' class='outer width100 bnone'><tr><th colspan='2'>" . _MD_PM_FROM . "</th></tr><tr class='even'>\n";
+        $poster = new XoopsUser($pm_arr[0]->getVar('from_userid'));
+        if (!$poster->isActive()) {
+            $poster = false;
+        }
+        echo "<td valign='top'>";
+        if ($poster != false) { // we need to do this for deleted users
+            echo "<a href='userinfo.php?uid=" . $poster->getVar('uid') . "' title=''>" . $poster->getVar('uname') . "</a><br>\n";
+            if ($poster->getVar('user_avatar') != '') {
+                echo "<img src='uploads/" . $poster->getVar('user_avatar') . "' alt='' /><br>\n";
+            }
+            if ($poster->getVar('user_from') != '') {
+                echo _MD_PM_FROMC . '' . $poster->getVar('user_from') . "<br><br>\n";
+            }
+            if ($poster->isOnline()) {
+                echo "<span class='red bold'>" . _MD_PM_ONLINE . "</span><br><br>\n";
+            }
+        } else {
+            echo $xoopsConfig['anonymous']; // we need to do this for deleted users
+        }
+        $iconName = htmlspecialchars((string)$pm_arr[0]->getVar('msg_image', 'E'), ENT_QUOTES | ENT_HTML5);
+        if ($iconName != '') {
+            echo "</td><td><img src='images/subject/" . $iconName . "' alt='' />&nbsp;" . _MD_PM_SENTC . '' . formatTimestamp($pm_arr[0]->getVar('msg_time'));
+        } else {
+            echo '</td><td>' . _MD_PM_SENTC . '' . formatTimestamp($pm_arr[0]->getVar('msg_time'));
+        }
+
+        echo '<hr /><br><strong>' . $pm_arr[0]->getVar('subject') . "</strong><br><br>\n";
+        echo $pm_arr[0]->getVar('msg_text') . "<br><br></td></tr><tr class='foot'><td class='width20 txtleft' colspan='2'>";
+        // we don't want to reply to a deleted user!
+        if ($poster != false) {
+            echo "<button type='button' class='btn btn-default btn-secondary' onclick='openWithSelfMain(\"" . XOOPS_URL . '/pmlite.php?reply=1&amp;msg_id=' . $pm_arr[0]->getVar('msg_id') . "\",\"pmlite\",565,500);' title='" . _MD_PM_REPLY . "'><span class='fa-solid fa-reply'></span></button>\n";
+        }
+        echo "<input type='hidden' name='delete' value='1' />";
+        echo $GLOBALS['xoopsSecurity']->getTokenHTML();
+        echo "<input type='hidden' name='msg_id' value='" . $pm_arr[0]->getVar('msg_id') . "' />";
+        echo "<button type='button' class='btn btn-default btn-secondary' onclick='document.delete" . $pm_arr[0]->getVar('msg_id') . ".submit();' title='" . _MD_PM_DELETE . "'><span class='fa-solid fa-xmark'></span></button>";
+        echo "</td></tr><tr><td class='txtright' colspan='2'>";
+        $previous = $start - 1;
+        $next     = $start + 1;
+        if ($previous >= 0) {
+            echo "<a href='readpmsg.php?start=" . $previous . '&amp;total_messages=' . $total_messages . "' title=''>" . _MD_PM_PREVIOUS . '</a> | ';
+        } else {
+            echo _MD_PM_PREVIOUS . ' | ';
+        }
+        if ($next < $total_messages) {
+            echo "<a href='readpmsg.php?start=" . $next . '&amp;total_messages=' . $total_messages . "' title=''>" . _MD_PM_NEXT . '</a>';
+        } else {
+            echo _MD_PM_NEXT;
+        }
+        echo "</td></tr></table></form>\n";
+    }
+    include $GLOBALS['xoops']->path('footer.php');
+}

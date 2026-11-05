@@ -1,0 +1,43 @@
+<?php
+/**
+ * TextSanitizer extension
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             class
+ * @subpackage          textsanitizer
+ * @since               2.3.0
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ */
+defined('XOOPS_ROOT_PATH') || exit('Restricted access');
+
+/**
+ * Class MytsIframe
+ */
+class MytsIframe extends MyTextSanitizerExtension
+{
+    /**
+     * @param MyTextSanitizer $myts
+     *
+     * @return bool
+     */
+    public function load(MyTextSanitizer $myts)
+    {
+        // The src (group 3) is rendered into a single-quoted src='...' attribute and
+        // must (a) exclude both quote types and angle brackets so a ' cannot break out
+        // of the attribute (SECURITY.md M-7), and (b) start with http://, https://, or
+        // a protocol-relative // — otherwise a javascript:/data: URI would execute in
+        // the page context. The height (group 2) already excludes quotes.
+        $myts->patterns[]     = "/\[iframe=(['\"]?)([^\"']*)\\1]((?:https?:\/\/|\/\/)[^\"'<>]*)\[\/iframe\]/sU";
+        $myts->replacements[] = "<iframe src='\\3' width='100%' height='\\2' scrolling='auto' frameborder='yes' marginwidth='0' marginheight='0' noresize></iframe>";
+
+        return true;
+    }
+}

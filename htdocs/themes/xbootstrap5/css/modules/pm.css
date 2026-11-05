@@ -1,0 +1,50 @@
+.xoops-message-header {
+    min-height: 40px;
+}
+
+.xoops-message-list div.col-xs-1,
+.xoops-message-list div.col-md-1 {
+    max-width: 14px;
+    text-align: center;
+}
+
+.xoops-message-list div.col-xs-1 .btn,
+.xoops-message-list div.col-md-1 .btn {
+    padding: 3px;
+    display: inline-block;
+    font-size: 0.9em;
+}
+
+.xoops-message-loop {
+    margin-bottom: 10px;
+}
+
+.current-tab {
+    margin-bottom: 20px;
+}
+
+.message-current-tab div.alert {
+    padding: 10px 30px 10px 10px;
+}
+
+/* PM action buttons — styled via name attribute for renderer independence */
+.pm-actions [name="move_messages"],
+.pm-actions [name="empty_messages"] {
+    background-color: transparent;
+    border-color: var(--bs-secondary);
+    color: var(--bs-secondary);
+}
+.pm-actions [name="move_messages"]:hover,
+.pm-actions [name="empty_messages"]:hover {
+    background-color: var(--bs-secondary);
+    color: #fff;
+}
+.pm-actions [name="delete_messages"] {
+    background-color: transparent;
+    border-color: var(--bs-danger);
+    color: var(--bs-danger);
+}
+.pm-actions [name="delete_messages"]:hover {
+    background-color: var(--bs-danger);
+    color: #fff;
+}

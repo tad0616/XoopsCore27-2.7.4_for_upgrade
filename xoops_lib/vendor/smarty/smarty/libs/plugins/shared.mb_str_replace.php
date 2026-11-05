@@ -1,0 +1,63 @@
+<?php
+/**
+ * Smarty shared plugin
+ *
+ * @package    Smarty
+ * @subpackage PluginsShared
+ */
+if (!function_exists('smarty_mb_str_replace')) {
+    /**
+     * Multibyte string replace
+     *
+     * @param string|string[] $search  the string to be searched
+     * @param string|string[] $replace the replacement string
+     * @param string          $subject the source string
+     * @param int             &$count  number of matches found
+     *
+     * @return string replaced string
+     * @author Rodney Rehm
+     */
+    function smarty_mb_str_replace($search, $replace, $subject, &$count = 0)
+    {
+        if (!is_array($search) && is_array($replace)) {
+            return false;
+        }
+        if (is_array($subject)) {
+            // call mb_replace for each single string in $subject
+            foreach ($subject as &$string) {
+                $string = smarty_mb_str_replace($search, $replace, $string, $c);
+                $count += $c;
+            }
+        } elseif (is_array($search)) {
+            if (!is_array($replace)) {
+                foreach ($search as &$string) {
+                    $subject = smarty_mb_str_replace($string, $replace, $subject, $c);
+                    $count += $c;
+                }
+            } else {
+                $n = max(count($search), count($replace));
+                while ($n--) {
+                    $subject = smarty_mb_str_replace(current($search), current($replace), $subject, $c);
+                    $count += $c;
+                    next($search);
+                    next($replace);
+                }
+            }
+        } else {
+            // mb_regex_encoding()/mb_split() are deprecated since PHP 8.6 (bundled oniguruma is unmaintained).
+            // str_replace() is byte-exact and safe on UTF-8, which is self-synchronizing; other multibyte
+            // charsets (EUC-JP, GB2312, ...) are round-tripped through UTF-8 so no match spans a character boundary.
+            $convert = (bool)strcasecmp(Smarty::$_CHARSET, 'UTF-8');
+            if ($convert) {
+                $subject = mb_convert_encoding($subject ?? '', 'UTF-8', Smarty::$_CHARSET);
+                $search = mb_convert_encoding($search, 'UTF-8', Smarty::$_CHARSET);
+                $replace = mb_convert_encoding($replace, 'UTF-8', Smarty::$_CHARSET);
+            }
+            $subject = str_replace($search, $replace, $subject ?? '', $count);
+            if ($convert) {
+                $subject = mb_convert_encoding($subject, Smarty::$_CHARSET, 'UTF-8');
+            }
+        }
+        return $subject;
+    }
+}

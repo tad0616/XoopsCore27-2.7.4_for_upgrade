@@ -1,0 +1,283 @@
+<?php
+/**
+ * XOOPS Editor Abstract class
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             core
+ * @since               2.3.0
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ */
+defined('XOOPS_ROOT_PATH') || exit('Restricted access');
+
+xoops_load('XoopsFormTextArea');
+
+/**
+ * Class XoopsEditor
+ */
+class XoopsEditor extends XoopsFormTextArea
+{
+    public $isEnabled;
+    public $configs;
+    public $rootPath;
+    public $_rows = 5;
+    public $_cols = 50;
+
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        $args = func_get_args();
+        // For backward compatibility
+        if (!is_array($args[0])) {
+            $i = 0;
+            foreach (['caption', 'name', 'value', 'rows', 'cols', 'hiddentext'] as $key) {
+                if (isset($args[$i])) {
+                    $configs[$key] = $args[$i];
+                }
+                ++$i;
+            }
+            $configs = (isset($args[$i]) && \is_array($args[$i])) ? array_merge($configs, $args[$i]) : $configs;
+        } else {
+            $configs = $args[0];
+        }
+		foreach ($configs as $key => $val) {
+			$method = 'set' . ucfirst($key);
+			if (method_exists($this, $method)) {
+				$this->{$method}($val);
+			} elseif (property_exists($this, "_{$key}")) {
+				$this->{"_{$key}"} = $val;
+			} elseif (property_exists($this, $key)) {
+				$this->{$key} = $val;
+			} else {
+				$this->configs[$key] = $val;
+			}
+		}
+
+        $this->isActive();
+    }
+
+    /**
+     * @return bool
+     */
+    public function isActive()
+    {
+        $this->isEnabled = true;
+
+        return $this->isEnabled;
+    }
+}
+
+/**
+ * Editor handler
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             core
+ * @since               2.3.0
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ */
+class XoopsEditorHandler
+{
+    // static $instance;
+    public $root_path       = '';
+    public $nohtml          = false;
+    public $allowed_editors = [];
+
+    /**
+     * Enter description here...
+     *
+     */
+    public function __construct()
+    {
+        $this->root_path = XOOPS_ROOT_PATH . '/class/xoopseditor';
+    }
+
+    /**
+     * Access the only instance of this class
+     *
+     * @return object
+     * @static
+     * @staticvar object
+     */
+    public static function getInstance()
+    {
+        static $instance;
+        if (!isset($instance)) {
+            $class    = self::class;
+            $instance = new $class();
+        }
+
+        return $instance;
+    }
+
+    /**
+     *
+     * @param string $name      Editor name which is actually the folder name
+     * @param array  $options   editor options: $key => $val
+     * @param string $OnFailure a pre-validated editor that will be used if the required editor is failed to create
+     * @param bool   $noHtml    dohtml disabled
+     *
+     * @return XoopsEditor|XoopsFormTextArea|null the editor; a plain textarea for Markdown
+     *                                            content when EasyMDE is unavailable
+     */
+    public function get($name = '', $options = null, $noHtml = false, $OnFailure = '')
+    {
+        require_once XOOPS_ROOT_PATH . '/class/xoopsmarkdown.php';
+        if (is_string($options['value'] ?? null) && XoopsMarkdown::source($options['value']) !== null) {
+            // Stored format outranks a remembered editor. An HTML editor would
+            // flatten Markdown newlines before the user can even switch back.
+            if (isset($this->getList($noHtml)['easymde']) && $editor = $this->_loadEditor('easymde', $options)) {
+                return $editor;
+            }
+            // Never fall through to a WYSIWYG editor when EasyMDE is unavailable.
+            // The textarea keeps the stored wrapper: without EasyMDE's hidden fields
+            // the save could not restore the Markdown marker, so the post would
+            // silently turn into BBCode.
+            return new XoopsFormTextArea($options['caption'] ?? '', $options['name'] ?? '', $options['value'], $options['rows'] ?? 5, $options['cols'] ?? 50);
+        }
+        if (array_key_exists($name, $this->getList($noHtml)) && $editor = $this->_loadEditor($name, $options)) {
+            return $editor;
+        }
+        $list = array_keys($this->getList($noHtml));
+        if (empty($OnFailure) || !in_array($OnFailure, $list)) {
+            $OnFailure = $list[0];
+        }
+        $editor = $this->_loadEditor($OnFailure, $options);
+
+        return $editor;
+    }
+
+    /**
+     * XoopsEditorHandler::getList()
+     *
+     * @param mixed $noHtml
+     *
+     * @return array
+     */
+    public function getList($noHtml = false)
+    {
+        /*
+            Do NOT use this method statically, please use
+            $editor_handler = XoopsEditorHandler::getInstance();
+            $result = array_flip($editor_handler->getList());
+        */
+        if (!isset($this->root_path)) {
+            $this->root_path = XOOPS_ROOT_PATH . '/class/xoopseditor';
+            $GLOBALS['xoopsLogger']->addDeprecated(__METHOD__ . '() should not be called statically.');
+        }
+
+        xoops_load('XoopsCache');
+        $list = XoopsCache::read('editorlist');
+        if (empty($list)) {
+            $list  = [];
+            $order = [];
+            xoops_load('XoopsLists');
+            $_list = XoopsLists::getDirListAsArray($this->root_path . '/');
+            foreach ($_list as $item) {
+                if (file_exists($file = $this->root_path . '/' . $item . '/language/' . $GLOBALS['xoopsConfig']['language'] . '.php')) {
+                    include_once $file;
+                } elseif (file_exists($file = $this->root_path . '/' . $item . '/language/english.php')) {
+                    include_once $file;
+                }
+                if (file_exists($file = $this->root_path . '/' . $item . '/editor_registry.php')) {
+                    include $file;
+                    if (empty($config['order'])) {
+                        continue;
+                    }
+                    $order[]     = $config['order'];
+                    $list[$item] = ['title' => $config['title'], 'nohtml' => $config['nohtml']];
+                }
+            }
+            array_multisort($order, $list);
+            XoopsCache::write('editorlist', $list);
+        }
+
+        $editors = array_keys($list);
+        if (!empty($this->allowed_editors)) {
+            $editors = array_intersect($editors, $this->allowed_editors);
+        }
+        $_list = [];
+        foreach ($editors as $name) {
+            if (!empty($noHtml) && empty($list[$name]['nohtml'])) {
+                continue;
+            }
+            $_list[$name] = $list[$name]['title'];
+        }
+
+        return $_list;
+    }
+
+    /**
+     * XoopsEditorHandler::render()
+     *
+     * @param mixed $editor
+     * @return string
+     * @deprecated
+     */
+    public function render($editor)
+    {
+        $GLOBALS['xoopsLogger']->addDeprecated(__METHOD__ . ' is deprecated');
+
+        return $editor->render();
+    }
+
+    /**
+     * XoopsEditorHandler::setConfig()
+     *
+     * @param  mixed $editor
+     * @param  mixed $options
+     * @return void
+     */
+    public function setConfig($editor, $options)
+    {
+        if (method_exists($editor, 'setConfig')) {
+            $editor->setConfig($options);
+        } else {
+            foreach ($options as $key => $val) {
+                $editor->$key = $val;
+            }
+        }
+    }
+
+    /**
+     * XoopsEditorHandler::_loadEditor()
+     *
+     * @param mixed $name
+     * @param mixed $options
+     * @return
+     */
+    public function _loadEditor($name, $options = null)
+    {
+        $editor = null;
+        if (empty($name) || !array_key_exists($name, $this->getList())) {
+            return $editor;
+        }
+        $editor_path = $this->root_path . '/' . $name;
+        if (file_exists($file = $editor_path . '/language/' . $GLOBALS['xoopsConfig']['language'] . '.php')) {
+            include_once $file;
+        } elseif (file_exists($file = $editor_path . '/language/english.php')) {
+            include_once $file;
+        }
+        if (file_exists($file = $editor_path . '/editor_registry.php')) {
+            include $file;
+        } else {
+            return $editor;
+        }
+        if (empty($config['order'])) {
+            return $editor;
+        }
+        include_once $config['file'];
+        $editor = new $config['class']($options);
+
+        return $editor;
+    }
+}

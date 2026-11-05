@@ -1,0 +1,95 @@
+<div>
+    <h4><{$smarty.const._MD_PM_PRIVATEMESSAGE}></h4>
+</div><br>
+<{if isset($op)}>
+    <{if $op=='out'}>
+        <a href='viewpmsg.php?op=out' title='<{$smarty.const._MD_PM_OUTBOX}>'><{$smarty.const._MD_PM_OUTBOX}></a>
+        &nbsp;
+    <{elseif $op == "save"}>
+        <a href='viewpmsg.php?op=save' title='<{$smarty.const._MD_PM_SAVEBOX}>'><{$smarty.const._MD_PM_SAVEBOX}></a>
+    <{/if}>   &nbsp;
+<{else}>
+    <a href='viewpmsg.php?op=in' title='<{$smarty.const._MD_PM_INBOX}>'><{$smarty.const._MD_PM_INBOX}></a>    &nbsp;
+<{/if}>
+
+<{if !empty($message)}>
+    <span class='bold'>&raquo;</span>
+    &nbsp;<{$message.subject}>
+    <br>
+    <form name="<{$pmform.name}>" id="<{$pmform.name}>" action="<{$pmform.action}>" method="<{$pmform.method}>" <{$pmform.extra}> >
+        <table cellpadding='4' cellspacing='1' class='outer bnone width100'>
+            <tr>
+                <th colspan='2'><{if isset($op) && $op == 'out'}><{$smarty.const._MD_PM_TO}><{else}><{$smarty.const._MD_PM_FROM}><{/if}></th>
+            </tr>
+            <tr class='even'>
+                <td class='aligntop'>
+                    <{if isset($poster) && $poster != false}>
+                        <a href='<{$xoops_url}>/userinfo.php?uid=<{$poster->getVar("uid")|escape}>'><{$poster->getVar("uname", "n")|escape}></a>
+                        <br>
+                        <{if ( $poster->getVar("user_avatar") != "" ) }>
+                            <img src='<{$xoops_url}>/uploads/<{$poster->getVar("user_avatar", "n")|escape:'url'}>' alt=''/>
+                            <br>
+                        <{/if}>
+                        <{if ( $poster->getVar("user_from") != "" ) }>
+                            <{$smarty.const._MD_PM_FROMC}><{$poster->getVar("user_from", "n")|escape}>
+                            <br>
+                            <br>
+                        <{/if}>
+                        <{if ( $poster->isOnline() ) }>
+                            <span class='bold red'><{$smarty.const._MD_PM_ONLINE}></span>
+                            <br>
+                            <br>
+                        <{/if}>
+                    <{else}>
+                        <{$anonymous|escape}>
+                    <{/if}>
+                </td>
+                <td>
+                    <{if !empty($message.msg_image)}>
+                        <img src='<{$xoops_url}>/images/subject/<{$message.msg_image|escape:'url'}>' alt=''/>
+                    <{/if}>
+                    <{$smarty.const._MD_PM_SENTC}><{$message.msg_time|escape}><br>
+                    <hr/>
+                    <strong><{$message.subject}></strong><br>
+                    <br>
+                    <{* msg_text and subject are pre-escaped by getVar('s') in the
+                        controller — do NOT add |escape here, it would double-encode. *}>
+                    <{$message.msg_text}><br>
+                    <br>
+                </td>
+            </tr>
+            <tr class='foot'>
+                <td class='width20 txtleft' colspan='2'>
+                    <{foreach item=element from=$pmform.elements|default:null}>
+                        <{$element.body}>
+                    <{/foreach}>
+                </td>
+            </tr>
+            <tr>
+                <td class='txtright' colspan='2'>
+                    <{if ( $previous >= 0 ) }>
+                        <a href='readpmsg.php?start=<{$previous|escape}>&amp;total_messages=<{$total_messages|escape}>&amp;op=<{$op|escape:'url'}>'
+                           title='<{$smarty.const._MD_PM_PREVIOUS}>'>
+                            <{$smarty.const._MD_PM_PREVIOUS}>
+                        </a>
+                        &nbsp|&nbsp;
+                    <{else}>
+                        <{$smarty.const._MD_PM_PREVIOUS}>&nbsp;|&nbsp;
+                    <{/if}>
+                    <{if ( $next < $total_messages ) }>
+                        <a href='readpmsg.php?start=<{$next|escape}>&amp;total_messages=<{$total_messages|escape}>&amp;op=<{$op|escape:'url'}>'
+                           title='<{$smarty.const._MD_PM_NEXT}>'>
+                            <{$smarty.const._MD_PM_NEXT}>
+                        </a>
+                    <{else}>
+                        <{$smarty.const._MD_PM_NEXT}>
+                    <{/if}>
+                </td>
+            </tr>
+        </table>
+    </form>
+<{else}>
+    <br>
+    <br>
+    <{$smarty.const._MD_PM_YOUDONTHAVE}>
+<{/if}>

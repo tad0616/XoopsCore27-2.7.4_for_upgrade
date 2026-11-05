@@ -1,0 +1,731 @@
+<?php
+
+/**
+ * Frameworks Module Admin
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       Grégory Mage (Aka Mage)
+ * @copyright   (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license         GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @author          Grégory Mage (Aka Mage)
+ */
+class ModuleAdmin
+{
+    private $_itemButton        = [];
+    private $_itemInfoBox       = [];
+    private $_itemInfoBoxLine   = [];
+    private $_itemConfigBoxLine = [];
+
+    /**
+     * @var XoopsModule
+     */
+    private $_obj;
+
+    /** @var string Web-root-relative path to the 32px icon directory */
+    private static $iconPath32 = '/Frameworks/moduleclasses/icons/32/';
+
+    /**
+     * Get the full URL to the 32px icon directory.
+     *
+     * @return string
+     */
+    private static function iconUrl32(): string
+    {
+        return XOOPS_URL . self::$iconPath32;
+    }
+
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        global $xoopsModule;
+        $this->_obj =& $xoopsModule;
+        $this->loadLanguage();
+    }
+
+    /**
+     * addAssets - add assets to theme, if it is established
+     *
+     * @return void
+     */
+    private function addAssets()
+    {
+        static $added;
+
+        if (empty($added) && !empty($GLOBALS['xoTheme'])) {
+            $added = true;
+            $GLOBALS['xoTheme']->addStylesheet("Frameworks/moduleclasses/moduleadmin/css/admin.css");
+        }
+    }
+
+    /**
+     * @return array
+     */
+    public function getInfo()
+    {
+        $infoArray = [];
+        if (!isset($infoArray) || empty($infoArray)) {
+            $infoArray                = [];
+            $infoArray['version']     = $this->getVersion();
+            $infoArray['releasedate'] = $this->getReleaseDate();
+            $infoArray['methods']     = $this->getClassMethods();
+        }
+
+        return $infoArray;
+    }
+
+    /**
+     * Return the Module Admin class version number
+     * return string version
+     **/
+    public function getVersion()
+    {
+        /**
+         * version is rev of this class
+         */
+        include_once __DIR__ . '/xoops_version.php';
+        $version = XOOPS_FRAMEWORKS_MODULEADMIN_VERSION;
+
+        return $version;
+    }
+
+    /**
+     * Return the Module Admin class release date
+     * return string version
+     **/
+    public function getReleaseDate()
+    {
+        /**
+         * version is rev of this class
+         */
+        include_once __DIR__ . '/xoops_version.php';
+        $releasedate = XOOPS_FRAMEWORKS_MODULEADMIN_RELEASEDATE;
+
+        return $releasedate;
+    }
+
+    /**
+     * Return the available methods for the class
+     *
+     * @return array methods supported by this class
+     */
+    public function getClassMethods()
+    {
+        $myMethods = get_class_methods(self::class);
+
+        return $myMethods;
+    }
+
+    //******************************************************************************************************************
+    // loadLanguage
+    //******************************************************************************************************************
+    // Loaf the language file.
+    //******************************************************************************************************************
+    /**
+     * @return bool|mixed
+     */
+    public function loadLanguage()
+    {
+        // basename() the configured language before it builds an include path.
+        $language = basename((string) $GLOBALS['xoopsConfig']['language']);
+        if (!file_exists($fileinc = XOOPS_ROOT_PATH . "/Frameworks/moduleclasses/moduleadmin/language/{$language}/main.php")) {
+            if (!file_exists($fileinc = XOOPS_ROOT_PATH . '/Frameworks/moduleclasses/moduleadmin/language/english/main.php')) {
+                return false;
+            }
+        }
+        $ret = include_once $fileinc;
+
+        return $ret;
+    }
+    //******************************************************************************************************************
+    // renderMenuIndex
+    //******************************************************************************************************************
+    // Creating a menu icon in the index
+    //******************************************************************************************************************
+    /**
+     * @return string
+     */
+    public function renderMenuIndex()
+    {
+        $this->addAssets();
+        $path       = XOOPS_URL . '/modules/' . $this->_obj->getVar('dirname') . '/';
+        $pathsystem = XOOPS_URL . '/modules/system/';
+        $this->_obj->loadAdminMenu();
+        $ret = "<div class=\"rmmenuicon\">\n";
+        foreach (array_keys($this->_obj->adminmenu) as $i) {
+            if ($this->_obj->adminmenu[$i]['link'] !== 'admin/index.php') {
+                // Escape the admin-defined menu values before they land in the
+                // href/title/src/alt attribute and text contexts.
+                $menuLink  = htmlspecialchars((string) $this->_obj->adminmenu[$i]['link'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $menuDesc  = htmlspecialchars((string) ($this->_obj->adminmenu[$i]['desc'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $menuTitle = htmlspecialchars((string) $this->_obj->adminmenu[$i]['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                // icon may be a full URL (direct URL access to icons in modules admin).
+                $iconRaw   = filter_var($this->_obj->adminmenu[$i]['icon'], FILTER_VALIDATE_URL) ? $this->_obj->adminmenu[$i]['icon'] : $path . $this->_obj->adminmenu[$i]['icon'];
+                $menuIcon  = htmlspecialchars((string) $iconRaw, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $ret .= "<a href=\"../" . $menuLink . "\" title=\"" . $menuDesc . "\">";
+                $ret .= "<img src=\"" . $menuIcon . "\" alt=\"" . $menuTitle . "\" />";
+                $ret .= '<span>' . $menuTitle . '</span>';
+                $ret .= '</a>';
+            }
+        }
+        if ($this->_obj->getInfo('help')) {
+            if (substr(XOOPS_VERSION, 0, 9) >= 'XOOPS 2.5') {
+                $ret .= "<a href=\"" . $pathsystem . 'help.php?mid=' . $this->_obj->getVar('mid', 's') . '&amp;' . $this->_obj->getInfo('help') . "\" title=\"" . _AM_SYSTEM_HELP . "\">";
+                $ret .= "<img width=\"32px\" src=\"" . self::iconUrl32() . "help.png\" alt=\"" . _AM_SYSTEM_HELP . "\" /> ";
+                $ret .= '<span>' . _AM_SYSTEM_HELP . '</span>';
+                $ret .= '</a>';
+            }
+        }
+        $ret .= "</div>\n<div style=\"clear: both;\"></div>\n";
+
+        return $ret;
+    }
+    //******************************************************************************************************************
+    // renderButton
+    //******************************************************************************************************************
+    // Creating button
+    //******************************************************************************************************************
+    /**
+     * @param string $position
+     * @param string $delimeter
+     *
+     * @return string
+     */
+    public function renderButton($position = 'right', $delimeter = '&nbsp;')
+    {
+        $this->addAssets();
+        $ret = '';
+        if (count($this->_itemButton) > 0) {
+            $path = self::iconUrl32();
+            $classMap = [
+                'right'  => 'floatright',
+                'left'   => 'floatleft',
+                'center' => 'aligncenter',
+            ];
+            $class = $classMap[$position] ?? 'floatright';
+            $ret = "<div class=\"{$class}\">\n";
+            $ret .= "<div class=\"xo-buttons\">\n";
+            foreach ($this->_itemButton as $button) {
+                // Escape the attribute/text values; $extra is pre-rendered markup
+                // (event handlers / extra attributes) and passes through raw.
+                $btnTitle = htmlspecialchars((string) $button['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $btnLink  = htmlspecialchars((string) $button['link'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $btnIconRaw = filter_var($button['icon'], FILTER_VALIDATE_URL) ? $button['icon'] : $path . $button['icon'];
+                $btnIcon  = htmlspecialchars((string) $btnIconRaw, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $ret .= "<a class='ui-corner-all tooltip' href='" . $btnLink . "' title='" . $btnTitle . "' " . $button['extra'] . '>';
+                $ret .= "<img src='" . $btnIcon . "' title='" . $btnTitle . "' alt='" . $btnTitle . "' />" . $btnTitle;
+                $ret .= "</a>\n";
+                $ret .= $delimeter;
+            }
+            $ret .= "</div>\n</div>\n";
+            $ret .= "<div class='clear'></div>\n";
+        }
+
+        return $ret;
+    }
+
+    /**
+     * @param        $title
+     * @param        $link
+     * @param string $icon
+     * @param string $extra
+     *
+     * @return bool
+     */
+    public function addItemButton($title, $link, $icon = 'add', $extra = '')
+    {
+        $ret = [];
+        $ret['title']        = $title;
+        $ret['link']         = $link;
+        $ret['icon']         = $icon . '.png';
+        $ret['extra']        = $extra;
+        $this->_itemButton[] = $ret;
+
+        return true;
+    }
+    //******************************************************************************************************************
+    // addConfigBoxLine
+    //******************************************************************************************************************
+    // $value: value
+    // $type: type of config:   1- "default": Just a line with value.
+    //                          2- "folder": check if this is an folder.
+    //                          3- "chmod": check if this is the good chmod.
+    //                                      For this type ("chmod"), the value is an array: array(path, chmod)
+    //******************************************************************************************************************
+    /**
+     * @param string $value
+     * @param string $type
+     *
+     * @return bool
+     */
+    public function addConfigBoxLine($value = '', $type = 'default')
+    {
+        $line = '';
+        $path = XOOPS_URL . '/Frameworks/moduleclasses/icons/16/';
+        switch ($type) {
+            default:
+            case 'default':
+                $line .= '<span>' . $value . '</span>';
+                break;
+
+            case 'folder':
+                if (!is_dir($value)) {
+                    $line .= "<span style='color : red; font-weight : bold;'>";
+                    $line .= "<img src='" . $path . "0.png' >";
+                    $line .= sprintf(_AM_MODULEADMIN_CONFIG_FOLDERKO, $value);
+                    $line .= "</span>\n";
+                } else {
+                    $line .= "<span style='color : green;'>";
+                    $line .= "<img src='" . $path . "1.png' >";
+                    $line .= sprintf(_AM_MODULEADMIN_CONFIG_FOLDEROK, $value);
+                    $line .= "</span>\n";
+                }
+                break;
+
+            case 'chmod':
+                if (is_dir($value[0])) {
+                    if (substr(decoct(fileperms($value[0])), 2) != $value[1]) {
+                        $line .= "<span style='color : red; font-weight : bold;'>";
+                        $line .= "<img src='" . $path . "0.png' >";
+                        $line .= sprintf(_AM_MODULEADMIN_CONFIG_CHMOD, $value[0], $value[1], substr(decoct(fileperms($value[0])), 2));
+                        $line .= "</span>\n";
+                    } else {
+                        $line .= "<span style='color : green;'>";
+                        $line .= "<img src='" . $path . "1.png' >";
+                        $line .= sprintf(_AM_MODULEADMIN_CONFIG_CHMOD, $value[0], $value[1], substr(decoct(fileperms($value[0])), 2));
+                        $line .= "</span>\n";
+                    }
+                }
+                break;
+        }
+        $this->_itemConfigBoxLine[] = $line;
+
+        return true;
+    }
+    //******************************************************************************************************************
+    // renderIndex
+    //******************************************************************************************************************
+    // Creating an index
+    //******************************************************************************************************************
+    /**
+     * @return string
+     */
+    public function renderIndex()
+    {
+        $this->addAssets();
+        $ret = "<table id='xo-modadmin-index'>\n<tr>\n";
+        $ret .= "<td width=\"60%\">\n";
+        $ret .= $this->renderMenuIndex();
+        $ret .= "</td>\n";
+        $ret .= "<td width=\"40%\">\n";
+        $ret .= $this->renderInfoBox();
+        $ret .= "</td>\n";
+        $ret .= "</tr>\n";
+        // If you use a config label
+        if ($this->_obj->getInfo('min_php') || $this->_obj->getInfo('min_xoops') || !empty($this->_itemConfigBoxLine)) {
+            $ret .= "<tr>\n";
+            $ret .= "<td colspan=\"2\">\n";
+            $ret .= "<fieldset class=\"mt-3\"><legend class=\"label mb-3\">";
+            $ret .= _AM_MODULEADMIN_CONFIG;
+            $ret .= "</legend>\n";
+
+            // php version
+            $path = XOOPS_URL . '/Frameworks/moduleclasses/icons/16/';
+            if ($this->_obj->getInfo('min_php')) {
+                if (version_compare(phpversion(), strtolower($this->_obj->getInfo('min_php')), '<')) {
+                    $ret .= "<div style='color : red; font-weight : bold;'><img src='" . $path . "0.png' >" . sprintf(_AM_MODULEADMIN_CONFIG_PHP, $this->_obj->getInfo('min_php'), phpversion()) . "</div>\n";
+                } else {
+                    $ret .= "<div style='color : green;'><img src='" . $path . "1.png' >" . sprintf(_AM_MODULEADMIN_CONFIG_PHP, $this->_obj->getInfo('min_php'), phpversion()) . "</div>\n";
+                }
+                $ret .= '<br>';
+            }
+
+            // Database version
+            $path    = XOOPS_URL . '/Frameworks/moduleclasses/icons/16/';
+            $dbarray = $this->_obj->getInfo('min_db');
+            if ($dbarray!=false) {
+                // changes from redheadedrod to use connector specific version info
+                switch (XOOPS_DB_TYPE) {
+                    // server should be the same in both cases
+                    case 'mysql':
+                    case 'mysqli':
+                        global $xoopsDB;
+                        $dbCurrentVersion = $xoopsDB->getServerVersion();
+                        break;
+                    //case "pdo":
+                    //    global $xoopsDB;
+                    //    $dbCurrentVersion = $xoopsDB->getAttribute(PDO::ATTR_SERVER_VERSION);
+                    //    break;
+                    default: // don't really support anything other than mysql
+                        $dbCurrentVersion = '0';
+                        break;
+                }
+                $currentVerParts   = explode('.', (string)$dbCurrentVersion);
+                $iCurrentVerParts  = array_map('intval', $currentVerParts);
+                $dbRequiredVersion = $dbarray[XOOPS_DB_TYPE];
+                $reqVerParts       = explode('.', (string)$dbRequiredVersion);
+                $iReqVerParts      = array_map('intval', $reqVerParts);
+                $icount            = $j = count($iReqVerParts);
+                $reqVer            = $curVer = 0;
+                for ($i = 0; $i < $icount; ++$i) {
+                    $j--;
+                    $reqVer += $iReqVerParts[$i] * 10 ** $j;
+                    if (isset($iCurrentVerParts[$i])) {
+                        $curVer += $iCurrentVerParts[$i] * 10 ** $j;
+                    } else {
+                        $curVer *= 10 ** $j;
+                    }
+                }
+                if ($reqVer > $curVer) {
+                    $ret .= "<span style='color : red; font-weight : bold;'><img src='" . $path . "0.png' >" . sprintf(XOOPS_DB_TYPE . ' ' . _AM_MODULEADMIN_CONFIG_DB, $dbRequiredVersion, $dbCurrentVersion) . "</span><br>\n";
+                } else {
+                    $ret .= "<span style='color : green;'><img src='" . $path . "1.png' >" . sprintf(strtoupper(XOOPS_DB_TYPE) . ' ' . _AM_MODULEADMIN_CONFIG_DB, $dbRequiredVersion, $dbCurrentVersion) . "</span><br>\n";
+                }
+            }
+
+            // xoops version
+            if ($this->_obj->getInfo('min_xoops')) {
+                $currentXoopsVersion = strtolower(str_replace('XOOPS ', '', XOOPS_VERSION));
+                if ($this->_obj->versionCompare($currentXoopsVersion, strtolower($this->_obj->getInfo('min_xoops')), '<')) {
+                    $ret .= "<span style='color : red; font-weight : bold;'><img src='" . $path . "0.png' >" . sprintf(_AM_MODULEADMIN_CONFIG_XOOPS, $this->_obj->getInfo('min_xoops'), substr(XOOPS_VERSION, 6, strlen(XOOPS_VERSION) - 6)) . "</span>\n";
+                } else {
+                    $ret .= "<span style='color : green;'><img src='" . $path . "1.png' >" . sprintf(_AM_MODULEADMIN_CONFIG_XOOPS, $this->_obj->getInfo('min_xoops'), substr(XOOPS_VERSION, 6)) . "</span>\n";
+                }
+                $ret .= '<br>';
+            }
+
+            // ModuleAdmin version
+            if ($this->_obj->getInfo('min_admin')) {
+                if ($this->getVersion() < $this->_obj->getInfo('min_admin')) {
+                    $ret .= "<span style='color : red; font-weight : bold;'><img src='" . $path . "0.png' >" . sprintf(_AM_MODULEADMIN_CONFIG_ADMIN, $this->_obj->getInfo('min_admin'), $this->getVersion()) . "</span>\n";
+                } else {
+                    $ret .= "<span style='color : green;'><img src='" . $path . "1.png' >" . sprintf(_AM_MODULEADMIN_CONFIG_ADMIN, $this->_obj->getInfo('min_admin'), $this->getVersion()) . "</span>\n";
+                }
+                $ret .= '<br>';
+            }
+            if (!empty($this->_itemConfigBoxLine)) {
+                foreach (array_keys($this->_itemConfigBoxLine) as $i) {
+                    $ret .= $this->_itemConfigBoxLine[$i];
+                    $ret .= '<br>';
+                }
+            }
+            $ret .= "</fieldset>\n";
+            $ret .= "</td>\n";
+            $ret .= "</tr>\n";
+        }
+        $ret .= "</table>\n";
+
+        return $ret;
+    }
+    //******************************************************************************************************************
+    // addInfoBox
+    //******************************************************************************************************************
+    // $title: title of an InfoBox
+    //******************************************************************************************************************
+    /**
+     * @param $title
+     *
+     * @return bool
+     */
+    public function addInfoBox($title)
+    {
+        $ret = [];
+        $ret['title']         = $title;
+        $this->_itemInfoBox[] = $ret;
+
+        return true;
+    }
+    //******************************************************************************************************************
+    // addInfoBoxLine
+    //******************************************************************************************************************
+    // $label: title of InfoBox Line
+    // $text:
+    // $type: type of config:   1- "default": Just a line with value.
+    //                          2- "information": check if this is an folder.
+    //                          3- "chmod": check if this is the good chmod.
+    //                                      For this type ("chmod"), the value is an array: array(path, chmod)
+    //******************************************************************************************************************
+    /**
+     * @param        $label
+     * @param        $text
+     * @param string $value
+     * @param string $color
+     * @param string $type
+     *
+     * @return bool
+     */
+    public function addInfoBoxLine($label, $text, $value = '', $color = 'inherit', $type = 'default')
+    {
+        $ret = [];
+        $ret['label'] = $label;
+        $line         = '';
+        switch ($type) {
+            default:
+            case 'default':
+                $line .= sprintf($text, "<span style='color : " . $color . "; font-weight : bold;'>" . $value . '</span>');
+                break;
+
+            case 'information':
+                $line .= $text;
+                break;
+        }
+        $ret['line']              = $line;
+        $this->_itemInfoBoxLine[] = $ret;
+
+        return true;
+    }
+
+    /**
+     * @return string
+     */
+    public function renderInfoBox()
+    {
+        $this->addAssets();
+        $ret = '';
+        foreach (array_keys($this->_itemInfoBox) as $i) {
+            $ret .= "<fieldset class=\"mt-3\"><legend class=\"label\">";
+            $ret .= $this->_itemInfoBox[$i]['title'];
+            $ret .= "</legend>\n";
+            foreach (array_keys($this->_itemInfoBoxLine) as $k) {
+                if ($this->_itemInfoBoxLine[$k]['label'] == $this->_itemInfoBox[$i]['title']) {
+                    $ret .= $this->_itemInfoBoxLine[$k]['line'];
+                    $ret .= '<br>';
+                }
+            }
+            $ret .= "</fieldset>\n";
+            $ret .= "<br>\n";
+        }
+
+        return $ret;
+    }
+
+    /**
+     * Render a single changelog line as a safe subset of presentational HTML.
+     *
+     * Changelog files ship inside the module and are authored by the module
+     * developer, but they are still sanitized defensively. The whole line is
+     * HTML-escaped first, so every literal "<", ">" and "&" survives as visible
+     * text with no content loss (e.g. "requires PHP <= 8.0" or "<table>" stay
+     * readable). Only an explicit allowlist of attribute-free presentational
+     * tags is then re-enabled; any tag carrying attributes, or any tag not on
+     * the list, stays inert escaped text and can never inject <script>, event
+     * handlers, or href="javascript:" vectors. The allowlist is enforced in the
+     * pattern below, not delegated to strip_tags().
+     *
+     * @param string $line raw changelog line
+     *
+     * @return string sanitized HTML fragment
+     */
+    public static function sanitizeChangelogLine(string $line): string
+    {
+        static $allowed = 'h1|h2|h3|h4|h5|h6|p|br|hr|ul|ol|li|strong|b|em|i|u|code|pre|blockquote|span';
+
+        $escaped = htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        // preg_replace_callback() returns ?string; fall back to the fully-escaped
+        // line if the PCRE engine ever fails, so output is never unsanitized.
+        return preg_replace_callback(
+            '#&lt;(/?)\s*(' . $allowed . ')\s*(/?)&gt;#i',
+            static fn($matches) => '<' . $matches[1] . strtolower($matches[2]) . $matches[3] . '>',
+            $escaped
+        ) ?? $escaped;
+    }
+
+    /**
+     * Create HTML text to display on Admin About page.
+     *
+     * The standard footer text is always appended via _AM_MODULEADMIN_ADMIN_FOOTER.
+     *
+     * @param string $business   the PAYPAL business email or Merchant Account ID
+     * @param bool   $logo_xoops true to prepend the XOOPS logo block above the footer text
+     *
+     * @return string HTML to display
+     */
+    public function renderAbout($business = '', $logo_xoops = true)
+    {
+        $this->addAssets();
+        $date         = preg_replace('/-\\\/', '/', $this->_obj->getInfo('release_date')); // make format a little more forgiving
+        $date         = explode('/', $date);
+        $author       = explode(',', $this->_obj->getInfo('author'));
+        $nickname     = explode(',', $this->_obj->getInfo('nickname'));
+        $release_date = formatTimestamp(mktime(0, 0, 0, (int)$date[1], (int)$date[2], (int)$date[0]), 's');
+        $module_dir   = $this->_obj->getVar('dirname');
+        // Module metadata comes from the module's own xoops_version.php (trusted,
+        // but installing a module already implies code trust). Escape it anyway
+        // before it lands in this admin-CP page as a hardening measure.
+        $esc          = static fn($v) => htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $module_info  = "<div id=\"about\"><label class=\"label_after\">" . _AM_MODULEADMIN_ABOUT_DESCRIPTION . "</label>\n"
+                      . "<text>" . $esc($this->_obj->getInfo('description')) . "</text><br>\n"
+                      . "<label class=\"label_after\">" . _AM_MODULEADMIN_ABOUT_UPDATEDATE . "</label>\n"
+                      . "<text class=\"bold\">" . formatTimestamp($this->_obj->getVar('last_update'), 'm') . "</text><br>\n"
+                      . "<label class=\"label_after\">" . _AM_MODULEADMIN_ABOUT_MODULESTATUS . "</label>\n"
+                      . "<text>" . $esc($this->_obj->getStatus()) . "</text><br>\n"
+                      . "<label class=\"label_after\">" . _AM_MODULEADMIN_ABOUT_WEBSITE . "</label>\n"
+                      . "<text><a class=\"tooltip\" href=\"http://" . $esc($this->_obj->getInfo('module_website_url')) . "\" rel=\"external\" title=\""
+                      . $esc($this->_obj->getInfo('module_website_name')) . " - " . $esc($this->_obj->getInfo('module_website_url')) . "\">"
+                      . $esc($this->_obj->getInfo('module_website_name')) . "</a></text>\n"
+                      . "</div>\n";
+        $authorArray  = [];
+        foreach ( $author as $k => $aName ) {
+            $authorArray[$k] = ( isset( $nickname[$k] ) && ( '' != $nickname[$k] ) ) ? "{$aName} ({$nickname[$k]})" : (string)($aName);
+        }
+        $license_url = $this->_obj->getInfo('license_url');
+        $license_url = $esc(preg_match('%^(https?:)?//%', $license_url) ? $license_url : 'http://' . $license_url);
+        $website = $this->_obj->getInfo('website');
+        $website = $esc(preg_match('%^(https?:)?//%', $website) ? $website : 'http://' . $website);
+
+        $ret = "<table>\n<tr>\n"
+             . "<td width=\"50%\">\n"
+             . "<table>\n<tr>\n<td style=\"width: 100px;\">\n"
+             . "<img src=\"" . XOOPS_URL . '/modules/' . $esc($module_dir) . '/' . $esc($this->_obj->getInfo('image')) . "\" alt=\"" . $esc($module_dir) . "\" style=\"float: left; margin-right: 10px;\">\n"
+             . "</td><td>\n"
+             . "<div style=\"margin-top: 1px; margin-bottom: 4px; font-size: 18px; line-height: 18px; color: #2F5376; font-weight: bold;\">\n"
+             . $esc($this->_obj->getInfo('name')) . ' ' . $esc($this->_obj->getVar('version')) . ' ' . " ({$release_date})\n"
+             . "<br>\n"
+             . "</div>\n"
+             . "<div style=\"line-height: 16px; font-weight: bold;\">\n"
+             . _AM_MODULEADMIN_ABOUT_BY . implode(', ', $authorArray) . "\n"
+             . "</div>\n"
+             . "<div style=\"line-height: 16px;\">\n"
+             . "<a href=\"$license_url\" target=\"_blank\" rel=\"external\">" . $esc($this->_obj->getInfo('license')) . "</a>\n"
+             . "<br>\n"
+             . "<a href=\"$website\" target=\"_blank\">" . $esc($this->_obj->getInfo('website')) . "</a>\n"
+             . "<br>\n"
+             . "<br>\n"
+             . "</div>\n"
+             . "</td></tr>\n";
+        if ((1 !== preg_match('/[^a-zA-Z0-9]/', $business)) || (false !== checkEmail($business))) {
+            $ret .= "<td colspan=\"2\">"
+                . "<div id=\"about_donate\"><fieldset class=\"mt-3\"><legend class=\"label\">Donation</legend><br>\n"
+                  . "<div style=\"clear: both; height: 1em;\"></div>\n"
+                  . "<form action=\"https://www.paypal.com/cgi-bin/webscr\" method=\"post\" target=\"_blank\" rel=\external\">\n"
+                  . "<input name=\"cmd\" type=\"hidden\" value=\"_donations\">\n"
+                  . "<input name=\"business\" type=\"hidden\" value=\"{$business}\">\n"
+                  . "<input name=\"currency_code\" type=\"hidden\" value=\"" . _AM_MODULEADMIN_ABOUT_AMOUNT_CURRENCY . "\">\n"
+                  . "<label class=\"label_after\" for=\"amount\">" . _AM_MODULEADMIN_ABOUT_AMOUNT . "</label><text><input class=\"donate_amount\" type=\"text\" name=\"amount\" value=\"" . _AM_MODULEADMIN_ABOUT_AMOUNT_SUGGESTED . "\" title=\"" . _AM_MODULEADMIN_ABOUT_AMOUNT_TTL . "\" pattern=\"" . _AM_MODULEADMIN_ABOUT_AMOUNT_PATTERN . "\"></text>\n"
+                  . "<br>\n"
+                  . "<text><input type=\"image\" name=\"submit\" class=\"donate_button\" src=\"" . XOOPS_URL . "/images/btn_donate_LG.png\" alt=\"" . _AM_MODULEADMIN_ABOUT_DONATE_IMG_ALT . "\"></text>\n"
+                  . "</form>\n"
+                  . "<br>\n"
+                  . "</fieldset>\n"
+                  . "</div>\n"
+                  . "</td>\n</tr>\n";
+        }
+        $ret .= "</table>\n";
+        $this->addInfoBox( _AM_MODULEADMIN_ABOUT_MODULEINFO );
+        $this->addInfoBoxLine( _AM_MODULEADMIN_ABOUT_MODULEINFO, $module_info, '', '', 'information' );
+        $ret .= $this->renderInfoBox()
+              . "</td>\n"
+              . "<td width=\"50%\">\n"
+            . "<fieldset class=\"mt-3\"><legend class=\"label\">" . _AM_MODULEADMIN_ABOUT_CHANGELOG . "</legend><br>\n"
+              . "<div class=\"txtchangelog\">\n";
+        // basename() the language segment so a poisoned config value cannot
+        // traverse out of the module language directory.
+        $language = empty( $GLOBALS['xoopsConfig']['language'] ) ? 'english' : basename( (string) $GLOBALS['xoopsConfig']['language'] );
+        // Changelog files are rendered as a safe subset of presentational HTML
+        // (see sanitizeChangelogLine()) so intended formatting displays while any
+        // script/event-handler/attribute injection stays inert escaped text.
+        $changelogLine = static fn($line) => self::sanitizeChangelogLine($line);
+        $file          = XOOPS_ROOT_PATH . "/modules/{$module_dir}/language/{$language}/changelog.txt";
+        if ( !is_file( $file ) && ( 'english' !== $language ) ) {
+            $file = XOOPS_ROOT_PATH . "/modules/{$module_dir}/language/english/changelog.txt";
+        }
+        if ( is_readable( $file ) ) {
+            $ret .= implode( '<br>', array_map( $changelogLine, file( $file ) ) ) . "\n";
+        } else {
+            $file = XOOPS_ROOT_PATH . "/modules/{$module_dir}/docs/changelog.txt";
+            if ( is_readable( $file ) ) {
+                $ret .= implode( '<br>', array_map( $changelogLine, file( $file ) ) ) . "\n";
+            }
+        }
+        $ret .= "</div>\n"
+              . "</fieldset>\n"
+              . "</td>\n"
+              . "</tr>\n"
+              . "</table>\n";
+        $ret .= $this->renderFooterInfo($logo_xoops);
+
+        return $ret;
+    }
+
+    /**
+     * Create HTML text to display the standard admin footer.
+     *
+     * The standard footer text/link from _AM_MODULEADMIN_ADMIN_FOOTER
+     * is always included. When $logo_xoops is true, the XOOPS logo
+     * image block is prepended above the footer text.
+     *
+     * @param bool $logo_xoops true to prepend the XOOPS logo block
+     *
+     * @return string HTML to display
+     */
+    public function renderFooterInfo($logo_xoops = true)
+    {
+        $this->addAssets();
+        $path = self::iconUrl32();
+        $ret  = '';
+        if (true === $logo_xoops) {
+            $ret .= "<div class=\"center\">"
+                  . "<a href=\"https://xoops.org\" target=\"_blank\" rel=\"external noopener noreferrer\"><img src=\"{$path}xoopsmicrobutton.gif\" alt=\"XOOPS\" title=\"XOOPS\"></a>"
+                  . "</div>";
+        }
+        $ret .= _AM_MODULEADMIN_ADMIN_FOOTER;
+
+        return $ret;
+    }
+
+    /**
+     * Display the standard admin footer.
+     *
+     * Echoes the same markup as renderFooterInfo().
+     *
+     * @param bool $logo_xoops true to prepend the XOOPS logo block
+     *
+     * @return void
+     */
+    public function displayFooterInfo($logo_xoops = true)
+    {
+        echo $this->renderFooterInfo($logo_xoops);
+    }
+
+    /**
+     * @param string $menu
+     *
+     * @return string
+     */
+    public function addNavigation($menu = '')
+    {
+        $this->addAssets();
+        $ret        = '';
+        $navigation = '';
+        $path       = XOOPS_URL . '/modules/' . $this->_obj->getVar('dirname') . '/';
+        $this->_obj->loadAdminMenu();
+        foreach (array_keys((array) $this->_obj->adminmenu) as $i) {
+            // Escape the admin-defined menu values before they land in attribute,
+            // CSS url() and text contexts (defence-in-depth on trusted metadata).
+            $menuTitle = htmlspecialchars((string) $this->_obj->adminmenu[$i]['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $menuLink  = htmlspecialchars((string) $this->_obj->adminmenu[$i]['link'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $menuIcon  = htmlspecialchars((string) $this->_obj->adminmenu[$i]['icon'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            if ($this->_obj->adminmenu[$i]['link'] == 'admin/' . $menu) {
+                $navigation .= $menuTitle . ' | ';
+                $ret = "<div class=\"CPbigTitle\" style=\"background-image: url('" . $path . $menuIcon . "'); background-repeat: no-repeat; background-position: left; padding-left: 50px;\">
+        <strong>" . $menuTitle . '</strong></div><br>';
+            } else {
+                $navigation .= "<a href = '../" . $menuLink . "'>" . $menuTitle . '</a> | ';
+            }
+        }
+        if (substr(XOOPS_VERSION, 0, 9) < 'XOOPS 2.5') {
+            $navigation .= "<a href = '../../system/admin.php?fct=preferences&op=showmod&mod=" . $this->_obj->getVar('mid') . "'>" . _MI_SYSTEM_ADMENU6 . '</a>';
+            $ret = $navigation . '<br><br>' . $ret;
+        }
+
+        return $ret;
+    }
+}

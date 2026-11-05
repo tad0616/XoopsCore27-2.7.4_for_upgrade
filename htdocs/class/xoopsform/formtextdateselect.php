@@ -1,0 +1,57 @@
+<?php
+/**
+ * XOOPS form element
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             kernel
+ * @subpackage          form
+ * @since               2.0.0
+ * @author              Kazumi Ono (AKA onokazu) http://www.myweb.ne.jp/, http://jp.xoops.org/
+ */
+
+if (!defined('XOOPS_ROOT_PATH')) {
+    throw new \RuntimeException('XOOPS root path not defined');
+}
+
+/**
+ * A text field with calendar popup
+ */
+class XoopsFormTextDateSelect extends XoopsFormText
+{
+    /**
+     * @param string     $caption
+     * @param string     $name
+     * @param int        $size
+     * @param int|string|null $value  Unix timestamp, empty string for blank, or null for current time
+     */
+    public function __construct($caption, $name, $size = 15, $value = null)
+    {
+        if ($value === null) {
+            // No value provided — default to current time (original behavior)
+            $value = time();
+        } elseif ($value === '' || $value === 0 || $value === '0') {
+            // Explicitly empty — allow blank date
+            $value = 0;
+        } else {
+            $value = is_numeric($value) ? (int) $value : time();
+        }
+        parent::__construct($caption, $name, $size, 25, $value);
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see XoopsFormText::render()
+     */
+    public function render()
+    {
+        return XoopsFormRenderer::getInstance()->get()->renderFormTextDateSelect($this);
+    }
+}

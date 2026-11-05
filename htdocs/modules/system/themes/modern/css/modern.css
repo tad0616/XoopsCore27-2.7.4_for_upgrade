@@ -1,0 +1,879 @@
+/**
+ * XOOPS Modern Admin Theme - Main Stylesheet
+ * ===========================================
+ * This file contains ONLY the theme's own layout and component styles.
+ * It should NOT be modified when updating the theme — replace it wholesale.
+ *
+ * Load order (defined in modern.php):
+ *   1. modern.css  — this file: theme layout and components
+ *   2. xoops.css   — XOOPS element integration (maintained by XOOPS team)
+ *   3. dark.css    — dark mode CSS variable overrides
+ *   4. fixes.css   — !important overrides against XOOPS core CSS
+ *   5. custom.css  — site-specific user customizations (never overwritten by updates)
+ */
+
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1e40af;
+    --primary-light: #3b82f6;
+    --secondary: #64748b;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #06b6d4;
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #94a3b8;
+    --border: #e2e8f0;
+    --border-light: #f1f5f9;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --radius-sm: 4px;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --sidebar-width: 260px;
+    --header-height: 64px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+/* Layout Structure */
+.modern-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.modern-main {
+    flex: 1;
+    margin-left: var(--sidebar-width);
+    padding-top: var(--header-height);
+    transition: margin-left 0.3s;
+}
+
+/* Header */
+.modern-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 1000;
+    box-shadow: var(--shadow-sm);
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 20px;
+}
+
+.header-brand h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.system-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 20px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Header Toolbar Icons (quick-access service/module icons) */
+.header-toolbar-icons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 12px;
+    overflow-x: auto;
+    max-width: 50vw;
+    flex: 1;
+    justify-content: center;
+    scrollbar-width: none;
+}
+
+.header-toolbar-icons::-webkit-scrollbar {
+    display: none;
+}
+
+.header-toolbar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.header-toolbar-icon:hover {
+    background: var(--bg-tertiary);
+    transform: translateY(-1px);
+}
+
+.header-toolbar-icon img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.header-toolbar-icon:hover img {
+    opacity: 1;
+}
+
+.header-toolbar-icon span {
+    font-size: 16px;
+}
+
+body.dark-mode .header-toolbar-icon:hover {
+    background: var(--bg-tertiary);
+}
+
+body.dark-mode .header-toolbar-icon img {
+    opacity: 0.8;
+    filter: brightness(1.1);
+}
+
+body.dark-mode .header-toolbar-icon:hover img {
+    opacity: 1;
+    filter: brightness(1.3);
+}
+
+@media (max-width: 768px) {
+    .header-toolbar-icons {
+        display: none;
+    }
+}
+
+.btn-icon {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 20px;
+}
+
+.btn-icon:hover {
+    background: var(--bg-tertiary);
+}
+
+body:not(.dark-mode) .icon-sun { display: none; }
+body.dark-mode .icon-moon { display: none; }
+
+/* Sidebar */
+.modern-sidebar {
+    position: fixed;
+    left: 0;
+    top: var(--header-height);
+    width: var(--sidebar-width);
+    height: calc(100vh - var(--header-height));
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 900;
+    transition: transform 0.3s;
+}
+
+.sidebar-nav {
+    padding: 16px 0;
+}
+
+.nav-section {
+    margin-bottom: 8px;
+}
+
+.nav-section-title {
+    padding: 8px 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-tertiary);
+}
+
+/* Collapsible sidebar sections */
+details.nav-section-collapsible {
+    border-top: 1px solid var(--border-light);
+    margin-bottom: 0;
+}
+
+details.nav-section-collapsible > summary.nav-section-title {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    list-style: none;
+    transition: color 0.2s;
+}
+
+details.nav-section-collapsible > summary.nav-section-title::-webkit-details-marker {
+    display: none;
+}
+
+details.nav-section-collapsible > summary.nav-section-title::marker {
+    display: none;
+    content: "";
+}
+
+details.nav-section-collapsible > summary.nav-section-title:hover {
+    color: var(--text-secondary);
+}
+
+.nav-section-arrow {
+    font-size: 8px;
+    transition: transform 0.2s;
+}
+
+details.nav-section-collapsible[open] > summary .nav-section-arrow {
+    transform: rotate(90deg);
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.nav-item:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-left-color: var(--primary);
+}
+
+.nav-icon {
+    font-size: 18px;
+    width: 20px;
+    text-align: center;
+}
+
+.nav-icon-img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    flex-shrink: 0;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.nav-item:hover .nav-icon-img {
+    opacity: 1;
+}
+
+.nav-text {
+    flex: 1;
+    font-size: 14px;
+}
+
+/* Dashboard Section */
+.dashboard-section {
+    padding: 24px;
+}
+
+/* KPI Cards */
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.kpi-card {
+    background: var(--bg-secondary);
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    transition: all 0.3s;
+    border-left: 4px solid var(--primary);
+}
+
+.kpi-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.kpi-card.success { border-left-color: var(--success); }
+.kpi-card.warning { border-left-color: var(--warning); }
+.kpi-card.danger  { border-left-color: var(--danger); }
+.kpi-card.info    { border-left-color: var(--info); }
+
+.kpi-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.kpi-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.kpi-change {
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+}
+
+.kpi-change.positive { color: var(--success); }
+.kpi-change.negative { color: var(--danger); }
+
+/* Charts */
+.charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.chart-card {
+    background: var(--bg-secondary);
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+}
+
+.chart-card.full {
+    grid-column: 1 / -1;
+}
+
+.chart-header {
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border-light);
+}
+
+.chart-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chart-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+canvas {
+    max-height: 300px;
+}
+
+/* Info Card */
+.info-card {
+    background: var(--bg-secondary);
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+}
+
+.info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.info-table th {
+    background: var(--bg-tertiary);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--border);
+}
+
+.info-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 14px;
+}
+
+.info-table tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge.success {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.badge.warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.badge.danger {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.badge.info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* Collapsible System Info */
+.info-card details {
+    border-bottom: 1px solid var(--border-light);
+}
+
+.info-card details:last-child {
+    border-bottom: none;
+}
+
+.system-info-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    transition: background-color 0.2s;
+}
+
+.system-info-toggle:hover {
+    background: var(--bg-tertiary);
+}
+
+.system-info-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.system-info-toggle::marker {
+    display: none;
+    content: '';
+}
+
+.toggle-indicator {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s;
+}
+
+details[open] > .system-info-toggle .toggle-indicator {
+    transform: rotate(90deg);
+}
+
+.system-info-content {
+    padding: 0 20px 16px;
+}
+
+/* Messages moved to top of .modern-main by JS */
+.modern-main > .errorMsg,
+.modern-main > .warningMsg {
+    margin: 16px 24px 0;
+}
+
+/* Content Wrapper */
+.content-wrapper {
+    padding: 24px;
+}
+
+/* Footer */
+.modern-footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+    margin-left: var(--sidebar-width);
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .modern-main {
+        margin-left: 0;
+    }
+
+    .modern-sidebar {
+        transform: translateX(-100%);
+    }
+
+    body.sidebar-open .modern-sidebar {
+        transform: translateX(0);
+    }
+
+    .modern-footer {
+        margin-left: 0;
+    }
+
+    .kpis {
+        grid-template-columns: 1fr;
+    }
+
+    .charts {
+        grid-template-columns: 1fr;
+    }
+
+    .header-brand h1 {
+        font-size: 16px;
+    }
+
+    .system-status {
+        display: none;
+    }
+}
+
+/* Utility Classes */
+.text-center { text-align: center; }
+.text-right  { text-align: right; }
+.mt-1 { margin-top: 8px; }
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+
+/* XOOPS message classes (.errorMsg, .warningMsg, etc.)  →  see xoops.css */
+
+
+/* Modules Grid - Fallback Display */
+.modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 2rem;
+}
+
+.module-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.module-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.module-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 1rem;
+}
+
+.module-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.module-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.module-link {
+    display: inline-block;
+    padding: 0.5rem 1.5rem;
+    background: var(--primary);
+    color: white;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.module-link:hover {
+    background: var(--primary-dark);
+}
+
+/* Dark mode for modules grid */
+body.dark-mode .module-card {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+body.dark-mode .module-title {
+    color: #f9fafb;
+}
+
+body.dark-mode .module-description {
+    color: #9ca3af;
+}
+
+/* XOOPS admin element overrides (table.outer, forms, tabs, toolbar, breadcrumb, etc.)  →  see xoops.css */
+
+/* Dark mode adjustments for sidebar icons */
+body.dark-mode .nav-icon-img {
+    opacity: 0.9;
+    filter: brightness(1.1);
+}
+
+body.dark-mode .nav-item:hover .nav-icon-img {
+    opacity: 1;
+    filter: brightness(1.2);
+}
+
+/* Module admin pages, tabs, toolbar, logger  →  see xoops.css */
+
+
+/* ========================================
+   CUSTOMIZER BODY CLASSES
+   JS-driven layout variants applied via <body> class.
+   XOOPS element overrides for compact-view  →  see xoops.css
+   ======================================== */
+
+body.compact-sidebar .modern-sidebar {
+    width: 80px;
+}
+
+body.compact-sidebar .modern-sidebar .nav-text,
+body.compact-sidebar .modern-sidebar .nav-section-title,
+body.compact-sidebar .modern-sidebar .nav-section-arrow {
+    display: none;
+}
+
+body.compact-sidebar .modern-main {
+    margin-left: 80px;
+}
+
+body.compact-sidebar .modern-footer {
+    margin-left: 80px;
+}
+
+body.compact-sidebar .modern-sidebar .nav-item {
+    justify-content: center;
+    padding: 10px;
+}
+
+body.no-animations,
+body.no-animations * {
+    transition: none !important;
+    animation: none !important;
+}
+
+body.compact-view .kpi-card {
+    padding: 12px;
+}
+
+body.compact-view .content-wrapper {
+    padding: 16px;
+}
+
+body.compact-view .nav-item {
+    padding: 6px 20px;
+}
+
+body.compact-view .chart-card {
+    padding: 12px;
+}
+
+
+/* ========================================
+   SIDEBAR TOGGLE FUNCTIONALITY
+   ======================================== */
+
+/* Sidebar is visible by default on desktop */
+.modern-sidebar {
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+}
+
+/* On mobile, hide sidebar by default */
+@media (max-width: 1024px) {
+    .modern-sidebar {
+        position: fixed;
+        left: 0;
+        top: var(--header-height);
+        height: calc(100vh - var(--header-height));
+        transform: translateX(-100%);
+        z-index: 1000;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    }
+
+    body.sidebar-open .modern-sidebar {
+        transform: translateX(0);
+    }
+
+    body.sidebar-open::before {
+        content: '';
+        position: fixed;
+        top: var(--header-height);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+}
+
+/* Desktop toggle - collapses sidebar to icons only */
+@media (min-width: 1025px) {
+    body.sidebar-open .modern-sidebar {
+        width: 80px;
+    }
+
+    body.sidebar-open .modern-sidebar .nav-text,
+    body.sidebar-open .modern-sidebar .nav-section-title,
+    body.sidebar-open .modern-sidebar .nav-section-arrow {
+        display: none;
+    }
+
+    body.sidebar-open .modern-main {
+        margin-left: 80px;
+    }
+
+    body.sidebar-open .modern-footer {
+        margin-left: 80px;
+    }
+
+    body.sidebar-open .nav-item {
+        justify-content: center;
+        padding: 12px 8px;
+    }
+
+    body.sidebar-open .nav-icon {
+        width: 100%;
+        font-size: 22px;
+        text-align: center;
+    }
+
+    body.sidebar-open .nav-icon-img {
+        margin: 0 auto;
+        display: block;
+        width: 24px;
+        height: 24px;
+    }
+}
+
+/* Tablet/mobile: footer spans full width when sidebar is hidden */
+@media (max-width: 1024px) {
+    .modern-footer {
+        margin-left: 0;
+    }
+}
+
+
+/* ========================================
+   LOGO HAMBURGER STYLING
+   ======================================== */
+
+.logo-hamburger {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    padding: 8px;
+    margin-right: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: var(--radius-sm);
+}
+
+.logo-hamburger:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+body.dark-mode .logo-hamburger:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* XOOPS logger output styles  →  see xoops.css */

@@ -1,0 +1,245 @@
+<?php
+defined('XOOPS_ROOT_PATH') or die();
+
+
+?><body>
+<!doctype html>
+<html lang="<?php echo _LANGCODE; ?>">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title><?php echo XOOPS_VERSION . ' : ' . _XOOPS_UPGRADE; ?></title>
+
+    <link rel="icon" type="image/png" href="<?php echo XOOPS_URL ?>/upgrade/assets/img/favicon.png"/>
+    <!-- Bootstrap Core CSS -->
+    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="assets/css/style.css" rel="stylesheet">
+
+    <!-- Custom Fonts -->
+    <link href="../media/font-awesome6/css/fontawesome.min.css" rel="stylesheet" type="text/css" as="font" crossorigin="anonymous">
+    <link href="../media/font-awesome6/css/solid.min.css" rel="stylesheet" as="font" crossorigin="anonymous">
+    <link href="../media/font-awesome6/css/brands.min.css" rel="stylesheet" as="font" crossorigin="anonymous">
+    <link href="../media/font-awesome6/css/v4-shims.min.css" rel="stylesheet" as="font" crossorigin="anonymous">
+
+    <?php
+    if (!empty($extraSources)) {
+        echo $extraSources;
+    }
+?>
+    <?php
+if (file_exists('language/' . $viewModel['upgradeLanguage'] . '/style.css')) {
+    echo '<link rel="stylesheet" type="text/css" media="all" href="language/'
+        . htmlspecialchars((string) $viewModel['upgradeLanguage'], ENT_QUOTES, 'UTF-8') . '/style.css" />';
+}
+?>
+
+</head>
+
+<body>
+<div id="wrapper">
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <div class="navbar-brand"><img src="assets/img/logo_small.png"></div>
+        </div>
+        <!-- Top Menu Items -->
+        <ul class="nav navbar-right top-nav">
+            <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" title="<?php echo _LANGUAGE; ?>"><i class="fa-solid fa-lg fa-language"></i> <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+                    <?php
+                $languages = $viewModel['languages'];
+foreach ($languages as $lang) {
+    echo '<li><a href="?lang=' . rawurlencode((string) $lang) . '">'
+        . htmlspecialchars((string) $lang, ENT_QUOTES, 'UTF-8') . '</a></li>';
+}
+?>
+                </ul>
+            </li>
+            <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown"><i class="fa-solid fa-book"></i> <?php echo _SUPPORT; ?> <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+                    <?php
+$allSupport = [];
+foreach ($viewModel['supportSites'] as $sites) {
+    if (is_array($sites)) {
+        $allSupport = array_merge($allSupport, $sites);
+    }
+}
+foreach ($allSupport as $support) {
+    echo '<li><a href="' . htmlspecialchars((string) $support['url'], ENT_QUOTES, 'UTF-8')
+        . '" target="_blank" rel="noopener noreferrer">'
+        . htmlspecialchars((string) $support['title'], ENT_QUOTES, 'UTF-8') . '</a></li>';
+}
+?>
+                </ul>
+            </li>
+            <li>
+                <a href="https://github.com/XOOPS/XoopsCore27" target="_blank" rel="noopener noreferrer" title="<?php echo htmlspecialchars(_XOOPS_SOURCE_CODE, ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-brands fa-lg fa-github"></i></a>
+            </li>
+        </ul>
+        <!-- Sidebar Menu Items - These collapse to the responsive navigation menu on small screens -->
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav side-nav">
+                <?php
+                $firstNeeded = true;
+foreach ($viewModel['upgradeQueue'] as $stepName => $info) {
+    if (!$info->applied && $firstNeeded) {
+        echo'<li class="active"><a><span class="fa-solid fa-exclamation-triangle"></span> '
+            . htmlspecialchars((string) $stepName, ENT_QUOTES, 'UTF-8') . '</a></li>';
+        $firstNeeded = false;
+    } elseif (!$info->applied) {
+        echo'<li><a><span class="fa-solid fa-exclamation-triangle text-warning"></span> '
+            . htmlspecialchars((string) $stepName, ENT_QUOTES, 'UTF-8') . '</a></li>';
+    } else {
+        echo'<li><a><span class="fa-solid fa-check text-success"></span> '
+            . htmlspecialchars((string) $stepName, ENT_QUOTES, 'UTF-8') . '</a></li>';
+    }
+}
+?>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </nav>
+
+    <div id="page-wrapper">
+
+        <div class="container-fluid">
+            <div class="row">
+                <?php if (!$viewModel['preflightDone']) { ?>
+                <div class="col-lg-3 col-md-6">
+                    <div class="panel panel-red">
+                        <div class="panel-heading">
+                            <div class="row">
+                                <div class="col-xs-3">
+                                    <span class="fa-solid fa-hand-paper-o fa-5x"></span>
+                                </div>
+                                <div class="col-xs-9 text-right">
+                                    <div class="huge">Smarty4</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-footer text-primary">
+                            <?php echo _XOOPS_SMARTY4_MIGRATION; ?>
+                            <div class="clearfix"></div>
+                        </div>
+                    </div>
+                </div>
+                <?php } ?>
+                <?php if ($viewModel['hasError']) { ?>
+                <div class="col-lg-3 col-md-6">
+                    <div class="panel panel-red">
+                        <div class="panel-heading">
+                            <div class="row">
+                                <div class="col-xs-3">
+                                    <span class="fa-solid fa-hand-stop-o fa-5x"></span>
+                                </div>
+                                <div class="col-xs-9 text-right">
+                                    <div class="huge"><span class="fa-solid fa-ban"></span></div>
+                                    <div><?php echo XOOPS_ERROR_ENCOUNTERED; ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-footer">
+                            <?php echo XOOPS_ERROR_SEE_BELOW; ?>
+                            <div class="clearfix"></div>
+                        </div>
+                    </div>
+                </div>
+                <?php } ?>
+                <div class="col-lg-3 col-md-6">
+                    <div class="panel panel-primary">
+                        <div class="panel-heading">
+                            <div class="row">
+                                <div class="col-xs-3">
+                                    <span class="fa-solid fa-gauge fa-5x"></span>
+                                </div>
+                                <div class="col-xs-9 text-right">
+                                    <div class="huge"><?php echo $viewModel['patchCount']; ?></div>
+                                    <div><?php echo _PATCH_COUNT; ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-footer text-primary">
+                            <?php echo _XOOPS_UPGRADE; ?>
+                            <div class="clearfix"></div>
+                        </div>
+                    </div>
+                </div>
+                <?php
+$versionParts = [];
+$versionResult = preg_match('/(^[a-z\s]*)([0-9\.]*)/i', XOOPS_VERSION, $versionParts);
+?>
+
+                <div class="col-lg-3 col-md-6">
+                    <div class="panel panel-green">
+                        <div class="panel-heading">
+                            <div class="row">
+                                <div class="col-xs-3">
+                                    <i class="fa-solid fa-tag fa-5x"></i>
+                                </div>
+                                <div class="col-xs-9 text-right">
+                                    <div class="huge"><?php echo $versionParts[2]; ?></div>
+                                    <div>Version</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-footer text-success">
+                            <?php echo XOOPS_VERSION; ?>
+                            <div class="clearfix"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+<!--div id="xo-banner">
+    <img src="img/logo.png" alt="XOOPS" />
+</div-->
+            <div id="wizard" class="row">
+
+                <?php echo $viewModel['content']; ?>
+
+            </div>
+        <!-- /.container-fluid -->
+        </div>
+    <!-- /#page-wrapper -->
+    </div>
+<!-- /#wrapper -->
+</div>
+
+<!-- jQuery -->
+<script src="assets/js/jquery.js"></script>
+
+<!-- Bootstrap Core JavaScript -->
+<script src="assets/js/bootstrap.min.js"></script>
+
+</body>
+
+</html>
+<script type="text/javascript">
+    $(document).ready(function () {
+        $(".xoform-help").hide();
+        /**
+         * Check the url to see if we reached 'page_end.php' and if so, launch the cleanup via ajax.
+         **/
+        if ('page_end.php' == location.pathname.substring(location.pathname.lastIndexOf('/') + 1)) {
+            $.post( "cleanup.php", { instsuffix: <?php echo isset($install_rename_suffix) ? "'" . $install_rename_suffix . "'" : "''"; ?> } );
+        };
+    });
+</script>

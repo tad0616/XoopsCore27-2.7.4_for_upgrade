@@ -1,0 +1,103 @@
+<?php
+/**
+ * XOOPS comment edit
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             kernel
+ * @since               2.0.0
+ * @author              Kazumi Ono (AKA onokazu) http://www.myweb.ne.jp/, http://jp.xoops.org/
+ */
+
+use Xmf\Request;
+
+if (!defined('XOOPS_ROOT_PATH') || !is_object($xoopsModule)) {
+    throw new \RuntimeException('Restricted access');
+}
+
+include_once $GLOBALS['xoops']->path('include/comment_constants.php');
+
+if (('system' !== $xoopsModule->getVar('dirname') && XOOPS_COMMENT_APPROVENONE == $xoopsModuleConfig['com_rule']) || (!is_object($xoopsUser) && !$xoopsModuleConfig['com_anonpost']) || !is_object($xoopsModule)) {
+    redirect_header(XOOPS_URL . '/user.php', 1, _NOPERM);
+}
+
+xoops_loadLanguage('comment');
+
+$com_id   = Request::getInt('com_id', 0, 'GET');
+$com_mode = htmlspecialchars(Request::getString('com_mode', '', 'GET'), ENT_QUOTES | ENT_HTML5);
+
+if ($com_mode == '') {
+    if (is_object($xoopsUser)) {
+        /** @var  XoopsUser $xoopsUser */
+        $com_mode = $xoopsUser->getVar('umode');
+    } else {
+        $com_mode = $xoopsConfig['com_mode'];
+    }
+}
+
+if (!Request::hasVar('com_order', 'GET')) {
+    if (is_object($xoopsUser)) {
+        $com_order = $xoopsUser->getVar('uorder');
+    } else {
+        $com_order = $xoopsConfig['com_order'];
+    }
+} else {
+    $com_order = Request::getInt('com_order', 0, 'GET');
+}
+
+/**
+ */
+$comment_handler = xoops_getHandler('comment');
+$comment         = $comment_handler->get($com_id);
+// Only the comment's author, an administrator of the module the comment
+// belongs to, or a system comment moderator may open it for editing; the
+// save path applies the same rule. The comment's own module is checked, not
+// the module whose page was requested, so an id from another module is not
+// opened here.
+$canEdit = false;
+if (is_object($comment) && is_object($xoopsUser)) {
+    include_once $GLOBALS['xoops']->path('modules/system/constants.php');
+    /** @var XoopsGroupPermHandler $sysperm_handler */
+    $sysperm_handler = xoops_getHandler('groupperm');
+    $isModerator = $xoopsUser->isAdmin((int) $comment->getVar('com_modid'))
+        || $sysperm_handler->checkRight('system_admin', XOOPS_SYSTEM_COMMENT, $xoopsUser->getGroups());
+    $isOwner     = (int) $xoopsUser->getVar('uid') > 0
+        && (int) $comment->getVar('com_uid') === (int) $xoopsUser->getVar('uid');
+    $canEdit = $isModerator || $isOwner;
+}
+if (!$canEdit) {
+    redirect_header(XOOPS_URL . '/', 2, _NOPERM);
+}
+$dohtml          = $comment->getVar('dohtml');
+$dosmiley        = $comment->getVar('dosmiley');
+$dobr            = $comment->getVar('dobr');
+$doxcode         = $comment->getVar('doxcode');
+$com_icon        = $comment->getVar('com_icon');
+$com_itemid      = $comment->getVar('com_itemid');
+$com_title       = $comment->getVar('com_title', 'e');
+$com_text        = $comment->getVar('com_text', 'e');
+$com_pid         = $comment->getVar('com_pid');
+$com_status      = $comment->getVar('com_status');
+$com_rootid      = $comment->getVar('com_rootid');
+// Start added by voltan
+$com_user  = $comment->getVar('com_user');
+$com_email = $comment->getVar('com_email');
+$com_url   = $comment->getVar('com_url');
+// End added by voltan
+
+if ($xoopsModule->getVar('dirname') !== 'system') {
+    include $GLOBALS['xoops']->path('header.php');
+    include $GLOBALS['xoops']->path('include/comment_form.php');
+    include $GLOBALS['xoops']->path('footer.php');
+} else {
+    xoops_cp_header();
+    include $GLOBALS['xoops']->path('include/comment_form.php');
+    xoops_cp_footer();
+}

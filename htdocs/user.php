@@ -1,0 +1,158 @@
+<?php
+/**
+ * XOOPS User
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2.0 or later (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             core
+ * @since               2.0.0
+ * @author              Kazumi Ono <webmaster@myweb.ne.jp>
+ */
+
+use Xmf\Request;
+
+include __DIR__ . '/mainfile.php';
+$xoopsPreload = XoopsPreload::getInstance();
+$xoopsPreload->triggerEvent('core.user.start');
+
+xoops_loadLanguage('user');
+
+$op = Request::getString('op', 'main');
+
+if ($op === 'main') {
+    if (!is_object($GLOBALS['xoopsUser'])) {
+        $GLOBALS['xoopsOption']['template_main'] = 'system_userform.tpl';
+        include $GLOBALS['xoops']->path('header.php');
+        $GLOBALS['xoopsTpl']->assign('lang_login', _LOGIN);
+        $GLOBALS['xoopsTpl']->assign('lang_username', _USERNAME);
+        // Assigned unconditionally. The template reads $redirect_page whether or not the
+        // form was reached through a redirect, and a theme is free to render it without a
+        // |default: guard -- the shipped xbootstrap5 profile form did so before this fix,
+        // so a guest opening the login form raised "Undefined array key redirect_page"
+        // plus "Attempt to read property value on null" on every render. That template is
+        // guarded now too, but assigning here is what holds for every theme, including
+        // ones outside this repository.
+        //
+        // ENT_SUBSTITUTE matters here, not just the explicit charset: without it
+        // htmlspecialchars() returns an EMPTY STRING for a target containing an invalid
+        // UTF-8 sequence, so a malformed redirect silently discarded where the visitor was
+        // going rather than losing the one bad byte. Verified on PHP 8.2.
+        $GLOBALS['xoopsTpl']->assign('redirect_page', Request::hasVar('xoops_redirect', 'GET')
+            ? htmlspecialchars(Request::getUrl('xoops_redirect', 'GET'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            : '');
+        if ($GLOBALS['xoopsConfig']['usercookie']) {
+            $GLOBALS['xoopsTpl']->assign('lang_rememberme', _US_REMEMBERME);
+        }
+        $GLOBALS['xoopsTpl']->assign('lang_password', _PASSWORD);
+        $GLOBALS['xoopsTpl']->assign('lang_notregister', _US_NOTREGISTERED);
+        $GLOBALS['xoopsTpl']->assign('lang_lostpassword', _US_LOSTPASSWORD);
+        $GLOBALS['xoopsTpl']->assign('lang_noproblem', _US_NOPROBLEM);
+        $GLOBALS['xoopsTpl']->assign('lang_youremail', _US_YOUREMAIL);
+        $GLOBALS['xoopsTpl']->assign('lang_sendpassword', _US_SENDPASSWORD);
+        $GLOBALS['xoopsTpl']->assign('mailpasswd_token', $GLOBALS['xoopsSecurity']->createToken());
+        include __DIR__ . '/footer.php';
+        exit();
+    }
+
+    $redirect = Request::getUrl('xoops_redirect', '', 'GET');
+    if ('' !== $redirect) {
+        // Shared same-site policy: off-site hosts, "//host", backslash and
+        // encoded-separator forms, ".." segments and paths outside XOOPS_URL
+        // all fall back to the home page.
+        require_once XOOPS_ROOT_PATH . '/include/file_safety.php';
+        $redirect = xoops_validateLocalRedirect($redirect, XOOPS_URL);
+        header('Location: ' . ('' !== $redirect ? $redirect : XOOPS_URL));
+        exit();
+    }
+
+    header('Location: ./userinfo.php?uid=' . $GLOBALS['xoopsUser']->getVar('uid'));
+    exit();
+}
+
+if ($op === 'login') {
+    include_once $GLOBALS['xoops']->path('include/checklogin.php');
+    exit();
+}
+
+if (in_array($op, ['2fa_setup', '2fa_manage'], true)) {
+    include_once $GLOBALS['xoops']->path('include/manage2fa.php');
+    exit();
+}
+
+if ($op === '2fa') {
+    include_once $GLOBALS['xoops']->path('include/checklogin2fa.php');
+    exit();
+}
+
+if ($op === 'logout') {
+    $message = '';
+    // Regenerate a new session id and destroy old session
+    $GLOBALS['sess_handler']->regenerate_id(true);
+    $_SESSION = [];
+    // The remember-me cookie name is a site setting and is empty when the
+    // feature is disabled; setcookie() rejects an empty name.
+    if (!empty($GLOBALS['xoopsConfig']['usercookie'])) {
+        xoops_setcookie($GLOBALS['xoopsConfig']['usercookie'], null, time() - 3600, '/', XOOPS_COOKIE_DOMAIN, 0);
+        xoops_setcookie($GLOBALS['xoopsConfig']['usercookie'], null, time() - 3600, '/');
+    }
+    // clear entry from online users table
+    if (is_object($GLOBALS['xoopsUser'])) {
+        /** @var XoopsOnlineHandler $online_handler */
+        $online_handler = xoops_getHandler('online');
+        $online_handler->destroy($GLOBALS['xoopsUser']->getVar('uid'));
+    }
+    $xoopsPreload->triggerEvent('core.behavior.user.logout');
+    $message = _US_LOGGEDOUT . '<br>' . _US_THANKYOUFORVISIT;
+    redirect_header(XOOPS_URL . '/', 1, $message);
+}
+
+if ($op === 'actv') {
+    $GLOBALS['xoopsLogger']->addDeprecated('Deprecated code. The activation is now handled by register.php');
+    $id     = Request::getInt('id', 0, 'GET');
+    $actkey = Request::getString('actkey', '', 'GET');
+    redirect_header("register.php?id={$id}&amp;actkey={$actkey}", 1, '');
+}
+
+if ($op === 'delete') {
+    /** @var XoopsConfigHandler $config_handler */
+    $config_handler             = xoops_getHandler('config');
+    $GLOBALS['xoopsConfigUser'] = $config_handler->getConfigsByCat(XOOPS_CONF_USER);
+    if (!$GLOBALS['xoopsUser'] || $GLOBALS['xoopsConfigUser']['self_delete'] != 1) {
+        redirect_header(XOOPS_URL . '/', 5, _US_NOPERMISS);
+    } else {
+        $groups = $GLOBALS['xoopsUser']->getGroups();
+        if (in_array(XOOPS_GROUP_ADMIN, $groups)) {
+            // users in the webmasters group may not be deleted
+            redirect_header('user.php', 5, _US_ADMINNO);
+        }
+        $ok = Request::getInt('ok', 0, 'POST');
+        if ($ok != 1) {
+            include $GLOBALS['xoops']->path('header.php');
+            xoops_confirm(['op' => 'delete', 'ok' => 1], 'user.php', _US_SURETODEL . '<br>' . _US_REMOVEINFO);
+            include $GLOBALS['xoops']->path('footer.php');
+        } else {
+            if (!$GLOBALS['xoopsSecurity']->check()) {
+                redirect_header('user.php', 3, implode('<br>', $GLOBALS['xoopsSecurity']->getErrors()));
+            }
+            $del_uid        = $GLOBALS['xoopsUser']->getVar('uid');
+            /** @var XoopsMemberHandler $member_handler */
+            $member_handler = xoops_getHandler('member');
+            if (false !== $member_handler->deleteUser($GLOBALS['xoopsUser'])) {
+                /** @var XoopsOnlineHandler $online_handler */
+                $online_handler = xoops_getHandler('online');
+                $online_handler->destroy($del_uid);
+                xoops_notification_deletebyuser($del_uid);
+                redirect_header(XOOPS_URL . '/', 5, _US_BEENDELED);
+            }
+            redirect_header(XOOPS_URL . '/', 5, _US_NOPERMISS);
+        }
+        exit();
+    }
+}

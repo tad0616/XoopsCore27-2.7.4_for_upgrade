@@ -1,0 +1,48 @@
+/*
+ You may not change or alter any portion of this comment or credits
+ of supporting developers from this source code or any supporting source code
+ which is considered copyrighted (c) material of the original comment or credit authors.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+*/
+
+/**
+ * Modules Javascript
+ *
+ * @copyright   (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license     GNU GPL 2.0 or later (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @author      Andricq Nicolas (AKA MusS)
+ */
+
+$(document).ready(
+    function(){
+        const $sortable = $('#xo-module-sort tbody.xo-module');
+        // Controls Drag + Drop
+        $sortable.sortable({
+                placeholder: 'ui-state-highlight',
+                update: function(event, ui) {
+                    var list = $(this).sortable( 'serialize');
+                    const $form = $('form[name="moduleadmin"]');
+                    const $tokenInput = $form.find("input[name='XOOPS_TOKEN_REQUEST']").first();
+                    if ($tokenInput.length) {
+                        list += '&' + encodeURIComponent($tokenInput.attr('name')) + '=' + encodeURIComponent($tokenInput.val());
+                    }
+                    // Disable sortable during request to prevent token race
+                    $sortable.sortable('disable');
+                    $.post( 'admin.php?fct=modulesadmin&op=order', list)
+                        .done(function (response) {
+                            _refreshToken(response, $tokenInput);
+                        })
+                        .fail(function (jqXHR) {
+                            _refreshToken(jqXHR.responseText, $tokenInput);
+                        })
+                        .always(function () {
+                            $sortable.sortable('enable');
+                        });
+                }
+            }
+        );
+    }
+);

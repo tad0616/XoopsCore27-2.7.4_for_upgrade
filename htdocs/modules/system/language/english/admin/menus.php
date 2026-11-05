@@ -1,0 +1,90 @@
+<?php
+/**
+ * @copyright    2000-2026 XOOPS Project https://xoops.org/
+ * @license      GNU GPL 2.0 or later (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @author       XOOPS Development Team
+ * _LANGCODE    en
+ * _CHARSET     UTF-8
+ */
+
+defined('XOOPS_ROOT_PATH') || exit('Restricted access');
+
+//2.7.0
+
+// Navigation
+define('_AM_SYSTEM_MENUS_NAV_MAIN', 'Menu Manager');
+define('_AM_SYSTEM_MENUS_NAV_BACK', 'Back to Menu List');
+define('_AM_SYSTEM_MENUS_NAV_CATEGORY', 'Category View');
+define('_AM_SYSTEM_MENUS_NAV_TIPS', '<strong>Tips:</strong><ul>'
+    . '<li>Use language constants (e.g. MENUS_HOME) as titles so they can be translated.</li>'
+    . '<li>Create a custom menus.php in your language folder to override constant values.</li>'
+    . '<li>Drag items to reorder. Nesting is supported up to 3 levels deep.</li>'
+    . '</ul>');
+
+// Common
+define('_AM_SYSTEM_MENUS_ACTIVE', 'Active');
+define('_AM_SYSTEM_MENUS_ACTIVE_YES', 'Enabled');
+define('_AM_SYSTEM_MENUS_ACTIVE_NO', 'Disabled');
+define('_AM_SYSTEM_MENUS_SAVED', 'Saved successfully');
+define('_AM_SYSTEM_MENUS_DELETED', 'Deleted successfully');
+define('_AM_SYSTEM_MENUS_ORDER_SAVED', 'Order saved');
+define('_AM_SYSTEM_MENUS_LISTCAT', 'List Categories');
+define('_AM_SYSTEM_MENUS_LISTITEM', 'List Items');
+
+// Category
+define('_AM_SYSTEM_MENUS_ADDCAT', 'Add Category');
+define('_AM_SYSTEM_MENUS_EDITCAT', 'Edit Category');
+define('_AM_SYSTEM_MENUS_DELCAT', 'Delete Category');
+define('_AM_SYSTEM_MENUS_CATTITLE', 'Category Title');
+define('_AM_SYSTEM_MENUS_CATTITLE_DESC', 'A language constant name (e.g. MENUS_HOME) can be used here so the label is translatable.');
+define('_AM_SYSTEM_MENUS_CATPREFIX', 'Prefix (HTML)');
+define('_AM_SYSTEM_MENUS_CATPREFIX_DESC', 'Optional markup shown before the category title, such as a Font Awesome icon.');
+define('_AM_SYSTEM_MENUS_CATSUFFIX', 'Suffix (HTML)');
+define('_AM_SYSTEM_MENUS_CATSUFFIX_DESC', 'Optional markup shown after the category title.');
+define('_AM_SYSTEM_MENUS_CATURL', 'URL');
+define('_AM_SYSTEM_MENUS_CATURL_DESC', 'Link for the category itself, such as "index.php" or an absolute URL.');
+define('_AM_SYSTEM_MENUS_CATTARGET', 'Link Target');
+define('_AM_SYSTEM_MENUS_CATPOSITION', 'Position');
+define('_AM_SYSTEM_MENUS_DELCAT_CONFIRM', 'Are you sure you want to delete the category "%s" and all its items?');
+
+// Item
+define('_AM_SYSTEM_MENUS_ADDITEM', 'Add Item');
+define('_AM_SYSTEM_MENUS_EDITITEM', 'Edit Item');
+define('_AM_SYSTEM_MENUS_DELITEM', 'Delete Item');
+define('_AM_SYSTEM_MENUS_ITEMTITLE', 'Item Title');
+define('_AM_SYSTEM_MENUS_ITEMTITLE_DESC', 'A language constant name can be used here so the label is translatable.');
+define('_AM_SYSTEM_MENUS_ITEMPREFIX', 'Prefix (HTML)');
+define('_AM_SYSTEM_MENUS_ITEMPREFIX_DESC', 'Optional markup shown before the item title, such as a Font Awesome icon.');
+define('_AM_SYSTEM_MENUS_ITEMSUFFIX', 'Suffix (HTML)');
+define('_AM_SYSTEM_MENUS_ITEMSUFFIX_DESC', 'Optional markup shown after the item title. Supports the <{xoInboxCount}> placeholder.');
+define('_AM_SYSTEM_MENUS_ITEMURL', 'URL');
+define('_AM_SYSTEM_MENUS_ITEMTARGET', 'Link Target');
+define('_AM_SYSTEM_MENUS_ITEMPOSITION', 'Position');
+define('_AM_SYSTEM_MENUS_ITEMPARENT', 'Parent Item');
+define('_AM_SYSTEM_MENUS_ITEMCATEGORY', 'Category');
+define('_AM_SYSTEM_MENUS_DELITEM_CONFIRM', 'Are you sure you want to delete the item "%s" and its sub-items?');
+
+// Target options
+define('_AM_SYSTEM_MENUS_TARGET_SELF', 'Same window');
+define('_AM_SYSTEM_MENUS_TARGET_BLANK', 'New window');
+
+// Permissions
+define('_AM_SYSTEM_MENUS_PERMISSION_VIEW_CATEGORY', 'Groups that can see this category');
+define('_AM_SYSTEM_MENUS_PERMISSION_VIEW_CATEGORY_DESC', 'Users must have category access before any of its items become visible.');
+define('_AM_SYSTEM_MENUS_PERMISSION_VIEW_ITEM', 'Groups that can see this item');
+define('_AM_SYSTEM_MENUS_PERMISSION_VIEW_ITEM_DESC', 'Item permissions are checked after the parent category permission.');
+
+// Errors
+define('_AM_SYSTEM_MENUS_ERROR_CATNOTFOUND', 'Category not found');
+define('_AM_SYSTEM_MENUS_ERROR_CATPROTECTED', 'Cannot delete a protected category');
+define('_AM_SYSTEM_MENUS_ERROR_CATINACTIVE', 'Cannot activate: the category is inactive');
+define('_AM_SYSTEM_MENUS_ERROR_ITEMNOTFOUND', 'Item not found');
+define('_AM_SYSTEM_MENUS_ERROR_ITEMPROTECTED', 'Cannot delete a protected item');
+define('_AM_SYSTEM_MENUS_ERROR_ITEMPARENT', 'Invalid parent item selected');
+define('_AM_SYSTEM_MENUS_ERROR_ITEMCYCLE', 'Cannot set parent: it would create a circular reference');
+define('_AM_SYSTEM_MENUS_ERROR_ITEMDEPTH', 'Maximum nesting depth (3 levels) exceeded');
+define('_AM_SYSTEM_MENUS_ERROR_PARENTINACTIVE', 'Cannot activate: the parent item is inactive');
+define('_AM_SYSTEM_MENUS_ERROR_NOITEMS', 'There are no submenu items in this category.');
+define('_AM_SYSTEM_MENUS_ERROR_ITEMEDIT', 'Enable this item before editing it');
+define('_AM_SYSTEM_MENUS_ERROR_ITEMDISABLE', 'Enable this item before deleting it');
+// The front-end MENUS_* labels live in language/<lang>/menus/menus.php.

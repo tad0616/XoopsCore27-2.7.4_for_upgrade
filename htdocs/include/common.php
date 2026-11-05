@@ -1,0 +1,663 @@
+<?php
+/**
+ * XOOPS common initialization file
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             kernel
+ */
+defined('XOOPS_MAINFILE_INCLUDED') || die('Restricted access');
+
+global $xoops, $xoopsPreload, $xoopsLogger, $xoopsErrorHandler, $xoopsSecurity, $sess_handler;
+
+/**
+ * YOU SHOULD NEVER USE THE FOLLOWING TO CONSTANTS, THEY WILL BE REMOVED
+ */
+defined('DS') || define('DS', DIRECTORY_SEPARATOR);
+defined('NWLINE') || define('NWLINE', "\n");
+
+/**
+ * Include files with definitions
+ */
+include_once XOOPS_ROOT_PATH . '/include/defines.php';
+include_once XOOPS_ROOT_PATH . '/include/version.php';
+include_once XOOPS_ROOT_PATH . '/include/license.php';
+
+/**
+ * Include XoopsLoad
+ */
+require_once XOOPS_ROOT_PATH . '/class/xoopsload.php';
+
+/**
+ * YOU SHOULD BE CAREFUL WITH THE PRELOAD METHODS IN 2.4*, THEY WILL BE DEPRECATED AND IMPLEMENTED IN A DIFFERENT WAY
+ */
+/**
+ *  Create Instance of Preload Object
+ */
+XoopsLoad::load('preload');
+$xoopsPreload = XoopsPreload::getInstance();
+$xoopsPreload->triggerEvent('core.include.common.start');
+
+/**
+ * YOU SHOULD BE CAREFUL WITH THE {@xos_kernel_Xoops2}, MOST METHODS WILL BE DEPRECATED
+ */
+/**
+ * Create Instance of xos_kernel_Xoops2 Object
+ * Attention, not all methods can be used at this point
+ */
+XoopsLoad::load('xoopskernel');
+$xoops = new xos_kernel_Xoops2();
+$xoops->pathTranslation();
+$xoopsRequestUri = & $_SERVER['REQUEST_URI'];// Deprecated (use the corrected $_SERVER variable now)
+
+/**
+ * Create Instance of XoopsSecurity Object and check Superglobals
+ */
+XoopsLoad::load('xoopssecurity');
+$xoopsSecurity = new XoopsSecurity();
+$xoopsSecurity->checkSuperglobals();
+
+/**
+ * Create Instance of XoopsLogger Object
+ */
+XoopsLoad::load('xoopslogger');
+$xoopsLogger       = XoopsLogger::getInstance();
+$xoopsErrorHandler = XoopsLogger::getInstance();
+$xoopsLogger->startTime();
+$xoopsLogger->startTime('XOOPS Boot');
+
+/**
+ * Attach the file logger IMMEDIATELY when xoops_data/data/debug.php asks for it.
+ *
+ * Deliberately here and not beside the debug_mode block further down: everything between
+ * the two points -- the database connection, config loading, the theme resolve -- is
+ * where a broken site actually fails, and those are precisely the errors and queries
+ * worth having. Registering after them meant the most useful diagnostics were never
+ * written.
+ *
+ * Only XOOPS_VAR_PATH is required, which mainfile.php has already defined. The logger
+ * takes the same seat DebugBar uses, so it receives notices, warnings, errors,
+ * deprecations and SQL with no change to any producer. With no debug.php this is one
+ * file_exists() and nothing more.
+ */
+// Guarded exactly as mainfile.php guards it, and for the same reason. Leaving this
+// unguarded made mainfile.php's care pointless: it survives the partial upgrade, then
+// common.php fatals fifteen lines later. include_once is a no-op when mainfile.php
+// already loaded the file, so on a healthy install this costs nothing.
+$xoopsDebugLoader = XOOPS_ROOT_PATH . '/include/debugconfig.php';
+if (is_readable($xoopsDebugLoader)) {
+    try {
+        require_once $xoopsDebugLoader;
+    } catch (\Throwable $e) {
+        // Fail closed, and deliberately silent: nothing has configured error display yet.
+        //
+        // Nothing is recorded here either. xoops_setDebugConfigError() lives in the file
+        // that just failed to parse, so in this exact case it does not exist to be called
+        // -- the recorder covers a broken debug.php, not a broken debugconfig.php. An
+        // earlier comment here pointed at it as though it applied.
+    }
+}
+unset($xoopsDebugLoader);
+
+$xoopsDebugConfig = function_exists('xoops_getDebugConfig') ? xoops_getDebugConfig() : [];
+
+// Called unconditionally, not only when a debug.php exists. XOOPS_ENVIRONMENT and
+// XOOPS_ENV are defined at the top of this function precisely so they exist on every
+// request -- and guarding the call meant they were absent on exactly the sites that have no
+// debug.php, which is every production site. A consumer reading them bare then fatals in
+// production and nowhere else. With no config the call sets both constants and returns.
+if (function_exists('xoops_applyDebugConfig')) {
+    xoops_applyDebugConfig();
+}
+
+if ([] !== $xoopsDebugConfig) {
+    // Applied HERE as well as further down. On an install whose mainfile.php predates
+    // 2.7.3 nothing has raised error_reporting yet, so php.ini still governs -- and if
+    // that is restrictive, handleError() discards the early errors before any logger sees
+    // them. Attaching the logger early is pointless unless reporting is raised with it.
+
+    // 'core_log' since 2.7.3; xoops_getDebugConfig() still publishes the older
+    // 'log' spelling as an alias pointing at the same array, so a debug.php
+    // written before the rename needs no edit.
+    if (!empty($xoopsDebugConfig['core_log']['enabled'])) {
+        XoopsLoad::load('filelogger');
+        if (class_exists('XoopsFileLogger', false)) {
+            $xoopsLogger->addLogger(new XoopsFileLogger((array) $xoopsDebugConfig['core_log']));
+        }
+    }
+}
+unset($xoopsDebugConfig);
+
+/**
+ * Include Required Files
+ */
+include_once $xoops->path('kernel/object.php');
+include_once $xoops->path('class/criteria.php');
+include_once $xoops->path('class/module.textsanitizer.php');
+require_once $xoops->path('include/xoopssetcookie.php');
+include_once $xoops->path('include/functions.php');
+
+// Preserve editor format in existing module columns before save/preview handlers
+// read input. This does not authorize a save or enable raw HTML.
+if (\Xmf\Request::hasVar('_xoops_markdown', 'POST')) {
+    require_once XOOPS_ROOT_PATH . '/class/xoopsmarkdown.php';
+    // Raw and untrimmed, and only the fields preparePost() changed are written
+    // back: a full Request::set() would rewrite (and by default trim) every field.
+    $markdownMask    = \Xmf\Request::MASK_ALLOW_RAW | \Xmf\Request::MASK_NO_TRIM;
+    $markdownPost    = \Xmf\Request::get('POST', $markdownMask);
+    $markdownRequest = \Xmf\Request::get('REQUEST', $markdownMask);
+    $markdownBefore  = $markdownPost;
+    XoopsMarkdown::preparePost($markdownPost, $markdownRequest);
+    foreach ($markdownPost as $markdownName => $markdownValue) {
+        if ($markdownValue !== $markdownBefore[$markdownName]) {
+            \Xmf\Request::setVar($markdownName, $markdownValue, 'POST');
+            // setVar(POST) also overwrites REQUEST; keep its own precedence.
+            \Xmf\Request::setVar($markdownName, $markdownRequest[$markdownName] ?? $markdownValue, 'REQUEST');
+        }
+    }
+    unset($markdownMask, $markdownPost, $markdownRequest, $markdownBefore, $markdownName, $markdownValue);
+}
+
+/* new installs should create this in mainfile */
+if (!defined('XOOPS_COOKIE_DOMAIN')) {
+    define('XOOPS_COOKIE_DOMAIN', xoops_getBaseDomain(XOOPS_URL));
+}
+
+/**
+ * Check Proxy;
+ * Requires functions
+ */
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$xoopsSecurity->checkReferer(XOOPS_DB_CHKREF)) {
+    define('XOOPS_DB_PROXY', 1);
+}
+
+/**
+ * Get database for making it global
+ * Requires XoopsLogger, XOOPS_DB_PROXY;
+ */
+include_once $xoops->path('class/database/databasefactory.php');
+/** @var XoopsMySQLDatabase $xoopsDB */
+$xoopsDB = XoopsDatabaseFactory::getDatabaseConnection();
+
+/**
+ * Get xoops configs
+ * Requires functions and database loaded
+ */
+/** @var XoopsConfigHandler $config_handler */
+$config_handler = xoops_getHandler('config');
+$xoopsConfig    = $config_handler->getConfigsByCat(XOOPS_CONF);
+
+// The two-factor feature is installed when its preference row came from the
+// database. Captured before the file configs merge so a file override cannot
+// fake installation. An empty result means the configuration read failed,
+// not that the feature is absent, so that case counts as installed and the
+// factor lookup decides: fail closed, never "no factor". Read by
+// XoopsUser2faHandler.
+defined('XOOPS_2FA_INSTALLED') || define('XOOPS_2FA_INSTALLED', [] === $xoopsConfig || array_key_exists('twofactor_mode', $xoopsConfig));
+
+/**
+ * Merge file and db configs.
+ */
+if (file_exists($file = $GLOBALS['xoops']->path('var/configs/xoopsconfig.php'))) {
+    $fileConfigs = include $file;
+    $xoopsConfig = array_merge($xoopsConfig, (array) $fileConfigs);
+    unset($fileConfigs, $file);
+} else {
+    trigger_error('File Path Error: ' . 'var/configs/xoopsconfig.php' . ' does not exist.');
+}
+
+// Boundary normalise theme_set / theme_set_allowed once, so every
+// downstream reader (header.php, site-closed.php, editors, theme
+// factory, the legacy CSS path helpers) sees a validated current
+// theme and a validated allowed list. xoops_getConfigOption() has its
+// own cache and is NOT covered here — the few callers that go through
+// that path must use xoops_resolveThemeConfig() at the call site.
+$xoopsConfig = array_replace($xoopsConfig, xoops_resolveThemeConfig($xoopsConfig));
+
+/**
+ * clickjack protection - Add option to HTTP header restricting using site in an iframe
+ */
+$xFrameOptions = $xoopsConfig['xFrameOptions'] ?? 'sameorigin';
+if (!headers_sent() && !empty($xFrameOptions)) {
+    header('X-Frame-Options: ' . $xFrameOptions);
+}
+
+//check if user set a local timezone (from XavierS)
+// $xoops_server_timezone="Etc/GMT";
+// if ($xoopsConfig["server_TZ"]>0) {
+// $xoops_server_timezone .="+".$xoopsConfig["server_TZ"]; } else{
+// $xoops_server_timezone .=$xoopsConfig["server_TZ"]; } date_default_timezone_set($xoops_server_timezone);
+
+//check if 'date.timezone' is set in php.ini
+if (!ini_get('date.timezone')) {
+    date_default_timezone_set('UTC');
+}
+
+/**
+ * Enable Gzip compression, r
+ * Requires configs loaded and should go before any output
+ */
+$xoops->gzipCompression();
+
+/**
+ * Start of Error Reporting.
+ *
+ * Two independent switches feed this:
+ *  - $xoopsConfig['debug_mode'], set in Admin -> Preferences, drives the in-page debug
+ *    output shown to administrators;
+ *  - xoops_data/data/debug.php, if present, drives file logging and PHP error settings.
+ *
+ * Either can be used alone. A site is normally left with debug_mode off and no
+ * debug.php, which is the historical behaviour and costs nothing.
+ *
+ * The loader was already included above, where the file logger is attached; the result is
+ * cached, so reading it again here is free. That earlier point is also what lets an
+ * install whose mainfile.php predates
+ * 2.7.3 still get file logging, even though its XOOPS_DEBUG constant was fixed earlier.
+ */
+// Guarded like the first read above, and for the identical reason. Guarding only the
+// earlier call site left this one to fatal on a truncated debugconfig.php a hundred lines
+// later -- the boot cleared every guard and then died anyway, which made the whole
+// fail-closed exercise decorative.
+$xoopsDebugConfig = function_exists('xoops_getDebugConfig') ? xoops_getDebugConfig() : [];
+
+if ($xoopsConfig['debug_mode'] == 1 || $xoopsConfig['debug_mode'] == 2) {
+    xoops_loadLanguage('logger');
+    error_reporting(E_ALL);
+    $xoopsLogger->enableRendering();
+    $xoopsLogger->usePopup = ($xoopsConfig['debug_mode'] == 2);
+} elseif ([] !== $xoopsDebugConfig) {
+    // File logging WITHOUT the in-page output.
+    //
+    // errors must still be reported or there is nothing to record, and rendering stays
+    // off so enabling this cannot change what a visitor sees.
+    //
+    // activated stays FALSE on purpose. It gates the in-memory collectors ($queries,
+    // $blocks, $extra) that exist only to be rendered into the page -- and nothing is
+    // going to render here. Leaving it true accumulated every statement of every request
+    // for a dump that never happens, which a long import would turn into an out-of-memory
+    // failure. Dispatch to registered loggers is deliberately outside that guard in
+    // addQuery/addBlock/addExtra/handleError, so the file logger still receives
+    // everything.
+    xoops_loadLanguage('logger');
+    if (function_exists('xoops_applyDebugConfig')) {
+        xoops_applyDebugConfig();
+    }
+    $xoopsLogger->activated = false;
+} else {
+    error_reporting(0);
+    $xoopsLogger->activated = false;
+}
+// Not left in the global scope: this array would otherwise be visible to every template
+// and module that reaches into globals. The earlier block unsets it for the same reason.
+unset($xoopsDebugConfig);
+
+
+/**
+ * Check Bad Ip Addressed against database and block bad ones, requires configs loaded
+ */
+$xoopsSecurity->checkBadips();
+
+/**
+ * Load Language settings and defines
+ */
+$xoopsPreload->triggerEvent('core.include.common.language');
+xoops_loadLanguage('global');
+xoops_loadLanguage('errors');
+xoops_loadLanguage('pagetype');
+
+/**
+ * User Sessions
+ */
+$xoopsUser        = '';
+$xoopsUserIsAdmin = false;
+/** @var XoopsMemberHandler $member_handler */
+$member_handler   = xoops_getHandler('member');
+/** @var \XoopsSessionHandler $sess_handler */
+$sess_handler     = xoops_getHandler('session');
+// SSL session bridge: transfers session ID from HTTP to HTTPS via POST
+$sslSessionId = \Xmf\Request::getString($xoopsConfig['sslpost_name'], '', 'POST');
+if ($xoopsConfig['use_ssl'] && $sslSessionId !== '' && preg_match('/^[a-zA-Z0-9,-]{26,128}$/', $sslSessionId)) {
+    session_id($sslSessionId); // NOSONAR - required for SSL bridging, input is regex-validated above
+} elseif ($xoopsConfig['use_mysession'] && $xoopsConfig['session_name'] != '' && $xoopsConfig['session_expire'] > 0) {
+    session_name($xoopsConfig['session_name']);
+    session_cache_expire($xoopsConfig['session_expire']);
+    // gc_maxlifetime can only be changed before the session starts.
+    if (
+        PHP_SESSION_ACTIVE !== session_status()
+        && false === ini_set('session.gc_maxlifetime', (string) ($xoopsConfig['session_expire'] * 60))
+    ) {
+        trigger_error('The session lifetime setting could not be applied.', E_USER_WARNING);
+    }
+}
+
+session_set_save_handler($sess_handler, true);
+
+if (PHP_SESSION_ACTIVE !== session_status()) {
+    // PHP's own warning can name the session save path; report one warning
+    // without it instead.
+    set_error_handler(static fn (): bool => true);
+    try {
+        $sessionStarted = session_start();
+    } finally {
+        restore_error_handler();
+    }
+    if (!$sessionStarted) {
+        trigger_error('The PHP session could not be started.', E_USER_WARNING);
+    }
+    unset($sessionStarted);
+}
+$xoopsPreload->triggerEvent('core.behavior.session.start');
+/**
+ * Remove expired session for xoopsUserId
+ */
+if ($xoopsConfig['use_mysession']
+    && $xoopsConfig['session_name'] != ''
+    && !\Xmf\Request::hasVar($xoopsConfig['session_name'], 'COOKIE')
+    && !empty($_SESSION['xoopsUserId'])
+) {
+    unset($_SESSION['xoopsUserId']);
+}
+
+/**
+ * Load xoopsUserId from cookie if "Remember me" is enabled.
+ *
+ * The token carries a fingerprint of the stored password hash
+ * (XoopsUserUtility::rememberFingerprint), keyed with the token's signing key.
+ * One guarded snapshot of that key, taken only when a cookie is present, serves
+ * the token's validation, the fingerprint check and the renewal's signature;
+ * without a snapshot the cookie is rejected and nothing else reads the key.
+ *
+ * The account is loaded and checked here, before the session is seeded: a
+ * token for a missing or inactive account, one issued before a password
+ * change, or one issued before the fingerprint claim existed never becomes a
+ * session. A signed token can still carry a malformed claim, so the value is
+ * type-checked rather than cast.
+ */
+$rememberClaims = false;
+$rememberKey = null;
+$rememberSigningKey = '';
+if (empty($_SESSION['xoopsUserId'])
+    && !isset($_SESSION['xoops2faPending'])
+    && !empty($GLOBALS['xoopsConfig']['usercookie'])
+    && '' !== \Xmf\Request::getString($GLOBALS['xoopsConfig']['usercookie'], '', 'COOKIE')
+) {
+    xoops_load('XoopsUserUtility');
+    $rememberKey = XoopsUserUtility::rememberKey();
+    $rememberUser = null;
+    if (null !== $rememberKey) {
+        $rememberSigningKey = $rememberKey->getSigning();
+        $rememberClaims = \Xmf\Jwt\TokenReader::fromCookie($rememberKey, $GLOBALS['xoopsConfig']['usercookie']);
+        if (is_object($rememberClaims) && !empty($rememberClaims->uid)) {
+            $rememberCandidate = $member_handler->getUser((int) $rememberClaims->uid);
+            $rememberUser = (is_object($rememberCandidate) && $rememberCandidate->isActive()
+                && is_string($rememberClaims->pfp ?? null)
+                && hash_equals(XoopsUserUtility::rememberFingerprint($rememberCandidate, $rememberSigningKey), $rememberClaims->pfp))
+                ? $rememberCandidate : null;
+            // The factor: only an absent or disabled row restores from a
+            // cookie in this phase (an enrolled row, or one this code cannot
+            // check, refuses), and a cookie issued before the last factor
+            // change (its fgen differs from the row's generation) is refused.
+            // An absent fgen reads as '' so cookies issued before this claim
+            // existed keep working for accounts with no row; a lookup failure
+            // refuses, because this is a login.
+            if (null !== $rememberUser) {
+                $rememberFgen = $rememberClaims->fgen ?? '';
+                try {
+                    $rememberRow = xoops_getHandler('user2fa')->getRow((int) $rememberUser->getVar('uid'));
+                } catch (\Throwable $e) {
+                    $rememberRow = false;
+                }
+                if (false === $rememberRow || !is_string($rememberFgen)
+                    || (is_array($rememberRow) && XoopsUser2faHandler::ROW_DISABLED !== $rememberRow['state'])
+                    || !hash_equals(is_array($rememberRow) ? (string) $rememberRow['generation'] : '', $rememberFgen)
+                ) {
+                    $rememberUser = null;
+                }
+                unset($rememberRow, $rememberFgen);
+            }
+        }
+    }
+    if (null !== $rememberUser) {
+        $_SESSION['xoopsUserId'] = $rememberUser->getVar('uid');
+    } else {
+        // Not a cookie login: the restore block must not renew a refused token.
+        $rememberClaims = false;
+        xoops_setcookie($GLOBALS['xoopsConfig']['usercookie'], null, time() - 3600, '/', XOOPS_COOKIE_DOMAIN, 0, true);
+        xoops_setcookie($GLOBALS['xoopsConfig']['usercookie'], null, time() - 3600);
+    }
+    unset($rememberCandidate, $rememberUser);
+}
+
+/**
+ * Log user in and deal with Sessions and Cookies
+ */
+if (!empty($_SESSION['xoopsUserId'])) {
+    $xoopsUser = $member_handler->getUser($_SESSION['xoopsUserId']);
+    // A missing or deactivated account ends the session here, whether it was
+    // restored from the session store or from the remember-me cookie (whose
+    // own checks ran above, before the session was seeded).
+    $endSession = !is_object($xoopsUser) || !$xoopsUser->isActive();
+    $factorRow  = null;
+    if (!$endSession) {
+        // The factor row, read on every request so an enrolment in another
+        // browser ends this session on its next request; a disable or an
+        // admin reset (which disables) leaves it signed in, stamped with the
+        // disabled row's generation.
+        // A failed lookup on an established session is logged and the
+        // request continues; failing closed here would sign out the whole
+        // site on a database blip.
+        try {
+            $factorRow = xoops_getHandler('user2fa')->getRow((int) $_SESSION['xoopsUserId']);
+        } catch (\Throwable $e) {
+            trigger_error('user_2fa lookup failed; the session continues', E_USER_WARNING);
+            $factorRow = false;
+        }
+        $factorState = XoopsUser2faHandler::STATE_NONE;
+        if (is_array($factorRow) && XoopsUser2faHandler::ROW_DISABLED !== $factorRow['state']) {
+            // Enrolled, or a row this code cannot check (never "none"): only
+            // a completed challenge or enrolment may put the generation in a
+            // session, so none stored ends it, whatever the policy. The exact
+            // state is resolved by the challenge page; opening the secret here
+            // would read and decrypt the key on every authenticated request.
+            $factorState = XoopsUser2faHandler::STATE_UNAVAILABLE;
+            $stored      = $_SESSION['xoops2faGeneration'] ?? null;
+            $endSession  = !is_string($stored) || !hash_equals((string) $factorRow['generation'], $stored);
+            unset($stored);
+        } elseif (false !== $factorRow) {
+            // Absent or disabled: stamp, so a later write to a non-enrolled
+            // row cannot sign anyone out.
+            $_SESSION['xoops2faGeneration'] = is_array($factorRow) ? (string) $factorRow['generation'] : '';
+        }
+        if (!$endSession && false !== $factorRow
+            && XoopsUser2faHandler::mustChallenge(XoopsUser2faHandler::policy($xoopsConfig), $factorState) && true !== ($_SESSION['xoops2faVerified'] ?? false)
+        ) {
+            $endSession = true;
+        }
+        unset($factorState);
+    }
+    if ($endSession) {
+        $xoopsUser = '';
+        $_SESSION  = [];
+        session_destroy();
+        // The remember-me cookie name is a site setting and may be empty when
+        // the feature is disabled; setcookie() rejects an empty name.
+        if (!empty($GLOBALS['xoopsConfig']['usercookie'])) {
+            xoops_setcookie($GLOBALS['xoopsConfig']['usercookie'], null, time() - 3600, '/', XOOPS_COOKIE_DOMAIN, 0, true);
+            xoops_setcookie($GLOBALS['xoopsConfig']['usercookie'], null, time() - 3600);
+        }
+    } else {
+        if (((int) $xoopsUser->getVar('last_login') + 60 * 5) < time()) {
+            $sql = 'UPDATE ' . $xoopsDB->prefix('users') . " SET last_login = '" . time()
+                   . "' WHERE uid = " . (int) $_SESSION['xoopsUserId'];
+            try {
+                $xoopsDB->exec($sql);
+            } catch (\Throwable $e) {
+                throw new \RuntimeException(
+                    \sprintf(_DB_QUERY_ERROR, $sql) . $xoopsDB->error(),
+                    E_USER_ERROR,
+                );
+            }
+        }
+
+        //$sess_handler->update_cookie();
+        // Group membership is resolved from the database on every request so a
+        // change made by an administrator applies on the next request; the
+        // session copy stays populated for code that reads it directly.
+        $_SESSION['xoopsUserGroups'] = $xoopsUser->getGroups();
+        // Only during a 'remember me' login, and never after a failed row
+        // lookup: an empty fgen would refuse this cookie for good on an
+        // account that has a row.
+        if (is_object($rememberClaims) && false !== $factorRow) {
+            // Read raw via 'n' format — getVar()'s default 's' escapes '&'
+            // to '&amp;', which the validator's HTML guard would reject.
+            $user_theme = xoops_validateThemeName((string) $xoopsUser->getVar('theme', 'n'));
+            if ($user_theme !== '' && $user_theme !== $xoopsConfig['theme_set']
+                && in_array($user_theme, $xoopsConfig['theme_set_allowed'], true)
+            ) {
+                $_SESSION['xoopsUserTheme'] = $user_theme;
+            }
+            // update our remember me cookie, recomputing the fingerprint from
+            // the loaded account rather than copying the old claim
+            $claims = [
+                'uid' => $_SESSION['xoopsUserId'],
+                'pfp' => XoopsUserUtility::rememberFingerprint($xoopsUser, $rememberSigningKey),
+                'fgen' => is_array($factorRow) ? (string) $factorRow['generation'] : '',
+            ];
+            $rememberTime = 60 * 60 * 24 * 30;
+            $token = \Xmf\Jwt\TokenFactory::build($rememberKey, $claims, $rememberTime);
+            xoops_setcookie(
+                $GLOBALS['xoopsConfig']['usercookie'],
+                $token,
+                time() + $rememberTime,
+                '/',
+                XOOPS_COOKIE_DOMAIN,
+                (XOOPS_PROT === 'https://'),
+                true,
+            );
+        }
+        $xoopsUserIsAdmin = $xoopsUser->isAdmin();
+    }
+}
+// The key bytes have no reader past the renewal above; keep them out of the
+// globals that templates, blocks and debug dumps can walk.
+unset($rememberKey, $rememberSigningKey);
+unset($factorRow, $endSession);
+// Cookie is handled by session_set_cookie_params() in the session handler (PHP 8.2+)
+// user characteristics are established
+$xoopsPreload->triggerEvent('core.include.common.auth.success');
+
+/**
+ * Debug level for XOOPS
+ * Check /xoops_data/configs/xoopsconfig.php for details
+ *
+ * Note: temporary solution only. Will be re-designed in XOOPS 3.0
+ */
+if ($xoopsLogger->activated) {
+    $level = isset($xoopsConfig['debugLevel']) ? (int) $xoopsConfig['debugLevel'] : 2;
+    if (($level == 2 && empty($xoopsUserIsAdmin)) || ($level == 1 && !$xoopsUser)) {
+        error_reporting(0);
+        $xoopsLogger->activated = false;
+    }
+    unset($level);
+}
+
+/**
+ * YOU SHOULD NEVER USE THE FOLLOWING METHOD, IT WILL BE REMOVED
+ */
+/**
+ * Theme Selection
+ */
+$xoops->themeSelect();
+xoops_load('XoopsFormRendererInterface');
+xoops_load('XoopsFormRenderer');
+
+/**
+ * Closed Site
+ */
+if ($xoopsConfig['closesite'] == 1) {
+    include_once $xoops->path('include/site-closed.php');
+}
+
+/**
+ * Load Xoops Module
+ */
+if (file_exists('./xoops_version.php')) {
+    $url_arr        = explode('/', stristr($_SERVER['PHP_SELF'], '/modules/'));
+    /** @var XoopsModuleHandler $module_handler */
+    $module_handler = xoops_getHandler('module');
+    $xoopsModule    = $module_handler->getByDirname($url_arr[2]);
+    unset($url_arr);
+
+    if (!$xoopsModule || !$xoopsModule->getVar('isactive')) {
+        include_once $xoops->path('header.php');
+        echo '<h4>' . _MODULENOEXIST . '</h4>';
+        include_once $xoops->path('footer.php');
+        exit();
+    }
+    /** @var XoopsGroupPermHandler $moduleperm_handler */
+    $moduleperm_handler = xoops_getHandler('groupperm');
+    if ($xoopsUser) {
+        if (!$moduleperm_handler->checkRight('module_read', $xoopsModule->getVar('mid'), $xoopsUser->getGroups())) {
+            redirect_header(XOOPS_URL, 1, _NOPERM, false);
+        }
+        $xoopsUserIsAdmin = $xoopsUser->isAdmin($xoopsModule->getVar('mid'));
+    } else {
+        if (!$moduleperm_handler->checkRight('module_read', $xoopsModule->getVar('mid'), XOOPS_GROUP_ANONYMOUS)) {
+            redirect_header(XOOPS_URL . '/user.php?from=' . $xoopsModule->getVar('dirname', 'n'), 1, _NOPERM);
+        }
+    }
+
+    if ($xoopsModule->getVar('dirname', 'n') !== 'system') {
+        if (file_exists($file = $xoops->path('modules/' . $xoopsModule->getVar('dirname', 'n') . '/language/' . $xoopsConfig['language'] . '/main.php'))) {
+            include_once $file;
+        } elseif (file_exists($file = $xoops->path('modules/' . $xoopsModule->getVar('dirname', 'n') . '/language/english/main.php'))) {
+            include_once $file;
+        }
+        unset($file);
+    }
+
+    if ($xoopsModule->getVar('hasconfig') == 1 || $xoopsModule->getVar('hascomments') == 1 || $xoopsModule->getVar('hasnotification') == 1) {
+        $xoopsModuleConfig = $config_handler->getConfigsByCat(0, $xoopsModule->getVar('mid'));
+    }
+} elseif ($xoopsUser) {
+    $xoopsUserIsAdmin = $xoopsUser->isAdmin(1);
+}
+
+/**
+ * YOU SHOULD AVOID USING THE FOLLOWING FUNCTION, IT WILL BE REMOVED
+ */
+//Creates 'system_modules_active' cache file if it has been deleted.
+xoops_getActiveModules();
+
+$xoopsLogger->stopTime('XOOPS Boot');
+$xoopsLogger->startTime('Module init');
+
+$xoopsPreload->triggerEvent('core.include.common.end');
+
+/**
+ * The error screen, last of all.
+ *
+ * Deliberately the final statement in this file. An error screen installs its own error
+ * and exception handlers, and so did XoopsLogger further up; whichever runs last owns
+ * them. Activating any earlier produces a screen that is quietly displaced before the
+ * first error ever happens -- which presents as the screen being broken rather than as
+ * the screen being overwritten, and is a genuinely unpleasant afternoon.
+ *
+ * Core registers nothing itself and knows no provider by name: it reads the owner
+ * declared in xoops_data/data/debug.php and triggers core.debug.errorscreen, which the
+ * module owning that token answers. Always defines XOOPS_ERROR_SCREEN_STATUS and
+ * XOOPS_ERROR_SCREEN_MESSAGE, whatever the outcome, so a module can tell "no provider is
+ * installed" apart from "a provider is installed and currently off". Costs one function
+ * call and a cached array read when no debug.php exists.
+ */
+if (function_exists('xoops_activateErrorScreen')) {
+    xoops_activateErrorScreen();
+}

@@ -1,0 +1,795 @@
+<?php
+/**
+ * XOOPS Criteria parser for database query
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             kernel
+ * @subpackage          database
+ * @since               2.0.0
+ * @author              Kazumi Ono <onokazu@xoops.org>
+ * @author              Nathan Dial
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ */
+defined('XOOPS_ROOT_PATH') || exit('Restricted access');
+
+/**
+ * A criteria (grammar?) for a database query.
+ *
+ * Abstract base class should never be instantiated directly.
+ *
+ * @abstract
+ */
+class CriteriaElement
+{
+    /**
+     * Sort order
+     *
+     * @var string
+     */
+    public $order = 'ASC';
+
+    /**
+     *
+     * @var string
+     */
+    public $sort = '';
+
+    /**
+     * Number of records to retrieve
+     *
+     * @var int
+     */
+    public $limit = 0;
+
+    /**
+     * Offset of first record
+     *
+     * @var int
+     */
+    public $start = 0;
+
+    /**
+     *
+     * @var string
+     */
+    public $groupby = '';
+
+    /**
+     * Constructor
+     */
+    public function __construct() {}
+
+    /**
+     * Render the criteria element
+     * @param \XoopsDatabase|null $db
+     * @return string
+     */
+    public function render(?\XoopsDatabase $db = null) {}
+
+    /**
+     *
+     * @param string $sort
+     */
+    public function setSort($sort)
+    {
+        $this->sort = $sort;
+    }
+
+    /**
+     *
+     * @return string
+     */
+    public function getSort()
+    {
+        return $this->sanitizeOrderClause($this->sort);
+    }
+
+    /**
+     *
+     * @param string $order
+     */
+    public function setOrder($order)
+    {
+        if ('DESC' === strtoupper($order)) {
+            $this->order = 'DESC';
+        }
+    }
+
+    /**
+     *
+     * @return string
+     */
+    public function getOrder()
+    {
+        return $this->order;
+    }
+
+    /**
+     *
+     * @param int $limit
+     */
+    public function setLimit($limit = 0)
+    {
+        $this->limit = (int) $limit;
+    }
+
+    /**
+     *
+     * @return int
+     */
+    public function getLimit()
+    {
+        return $this->limit;
+    }
+
+    /**
+     *
+     * @param int $start
+     */
+    public function setStart($start = 0)
+    {
+        $this->start = (int) $start;
+    }
+
+    /**
+     *
+     * @return int
+     */
+    public function getStart()
+    {
+        return $this->start;
+    }
+
+    /**
+     *
+     * @param string $group
+     */
+    public function setGroupBy($group)
+    {
+        $this->groupby = $group;
+    }
+
+    /**
+     *
+     * @return string
+     */
+    public function getGroupby()
+    {
+        $groupby = $this->sanitizeOrderClause($this->groupby);
+
+        return $groupby !== '' ? " GROUP BY {$groupby}" : '';
+    }
+
+    /**
+     * Validate an ORDER BY / GROUP BY column-list fragment.
+     *
+     * Accepts a comma-separated list of (optionally backticked or dotted)
+     * column references, each with an optional ASC/DESC direction. Any other
+     * construct — parentheses, quotes, comment markers, semicolons, operators —
+     * indicates an injection attempt and collapses the fragment to an empty
+     * string so the caller omits the clause entirely (fail closed).
+     *
+     * @param string $clause raw sort/groupby fragment
+     * @return string validated fragment, or '' when it is not a safe column list
+     */
+    protected function sanitizeOrderClause($clause)
+    {
+        $clause = trim((string) $clause);
+        if ($clause === '') {
+            return '';
+        }
+
+        return preg_match('/^[A-Za-z0-9_.,`\s]+$/', $clause) ? $clause : '';
+    }
+    /**
+     * *#@-
+     */
+}
+
+/**
+ * Collection of multiple {@link CriteriaElement}s
+ *
+ */
+class CriteriaCompo extends CriteriaElement
+{
+    /**
+     * The elements of the collection
+     *
+     * @var array Array of {@link CriteriaElement} objects
+     */
+    public $criteriaElements = [];
+
+    /**
+     * Conditions
+     *
+     * @var array
+     */
+    public $conditions = [];
+
+    /**
+     * Constructor
+     *
+     * @param CriteriaElement|null $ele
+     * @param string $condition
+     */
+    public function __construct(?CriteriaElement $ele = null, $condition = 'AND')
+    {
+        if (isset($ele)) {
+            $this->add($ele, $condition);
+        }
+    }
+
+    /**
+     * Add an element
+     *
+     * @param CriteriaElement|object $criteriaElement
+     * @param string                 $condition
+     * @return object reference to this collection
+     */
+    public function &add(CriteriaElement $criteriaElement, $condition = 'AND')
+    {
+        if (is_object($criteriaElement)) {
+            $this->criteriaElements[] = & $criteriaElement;
+            $this->conditions[]       = $condition;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Make the criteria into a query string
+     *
+     * @return string
+     */
+    public function render(?\XoopsDatabase $db = null): string
+    {
+        $ret   = '';
+        $count = count($this->criteriaElements);
+        if ($count > 0) {
+            // Pass the DB connection down to children
+            $renderString = $this->criteriaElements[0]->render($db);
+            for ($i = 1; $i < $count; ++$i) {
+                if (!$render = $this->criteriaElements[$i]->render($db)) {
+                    continue;
+                }
+                $renderString .= (empty($renderString) ? '' : ' ' . $this->conditions[$i] . ' ') . $render;
+            }
+            $ret = empty($renderString) ? '' : "({$renderString})";
+        }
+
+        return $ret;
+    }
+
+    /**
+     * Make the criteria into a SQL "WHERE" clause
+     * @param \XoopsDatabase|null $db
+     * @return string
+     */
+    public function renderWhere(?\XoopsDatabase $db = null): string
+    {
+        $ret = $this->render($db);
+        $ret = ($ret !== '') ? 'WHERE ' . $ret : '';
+
+        return $ret;
+    }
+
+    /**
+     * Generate an LDAP filter from criteria
+     *
+     * @return string
+     * @author Nathan Dial ndial@trillion21.com
+     */
+    public function renderLdap()
+    {
+        $retval = '';
+        $count  = count($this->criteriaElements);
+        if ($count > 0) {
+            $retval = $this->criteriaElements[0]->renderLdap();
+            for ($i = 1; $i < $count; ++$i) {
+                $cond   = strtoupper($this->conditions[$i]);
+                $op     = ($cond === 'OR') ? '|' : '&';
+                $retval = "({$op}{$retval}" . $this->criteriaElements[$i]->renderLdap() . ')';
+            }
+        }
+
+        return $retval;
+    }
+}
+
+/**
+ * A single criteria
+ *
+ */
+class Criteria extends CriteriaElement
+{
+    /** @var string|null Optional table prefix (alias) like "u" for "u.`uname`" */
+    public $prefix;
+    /** @var string|null Optional column wrapper function with sprintf format, e.g. 'LOWER(%s)' */
+    public $function;
+    /** @var string Column name or expression (backticks handled for simple columns) */
+    public $column;
+    /** @var string SQL operator (=, <, >, LIKE, IN, IS NULL, etc.) */
+    public $operator;
+    /** @var mixed Value for the operator: scalar for most ops, array or "(a,b)" for IN/NOT IN */
+    public $value;
+    /** @var bool Allow empty string values to render (default false = skip empty) */
+    protected $allowEmptyValue = false;
+    /** @var bool Allow inner wildcards in LIKE (default false = escape inner % and _) */
+    protected $allowInnerWildcards = false;
+    /** @var bool Global default for allowing inner wildcards in LIKE across all instances */
+    protected static $defaultAllowInnerWildcards = false;
+    /** @var bool|null Cached legacy log flag */
+    private static $legacyLogEnabled = null;
+
+    /**
+     * Initialize logging flag once.
+     *
+     * Reads the configuration as well as the constant, and the config term is not
+     * decoration. XOOPS_DB_LEGACY_LOG is defined in mainfile.php, and mainfile.php
+     * survives an upgrade untouched by design -- so a site upgraded from 2.7.1 has it
+     * frozen at false, defined before any 2.7.3 code runs, and nothing downstream can
+     * change it. Setting 'legacy_log' in xoops_data/data/debug.php had no effect there at
+     * all: the switch the documentation tells you to use was inert on exactly the
+     * installations most likely to still contain legacy IN lists.
+     *
+     * Added to the constant rather than substituted for it, so a hand-edited
+     * XOOPS_DB_LEGACY_LOG in mainfile.php keeps working. Same rule as
+     * xoops_isDeveloperRequest(): each term may widen, none may narrow.
+     *
+     * function_exists() because this class is reachable from the installer and from unit
+     * tests, where include/debugconfig.php has not been loaded.
+     */
+    private static function isLegacyLogEnabled(): bool
+    {
+        if (self::$legacyLogEnabled === null) {
+            self::$legacyLogEnabled = (defined('XOOPS_DB_LEGACY_LOG') && XOOPS_DB_LEGACY_LOG)
+                || (function_exists('xoops_getDebugConfig')
+                    && true === (xoops_getDebugConfig()['database']['legacy_log'] ?? false));
+        }
+        return self::$legacyLogEnabled;
+    }
+
+    /**
+     * Is debugging on for this site?
+     *
+     * Delegates to include/debugconfig.php so there is one predicate, not a copy that
+     * drifts. NOT xoops_isDeveloperRequest(): this decides whether to compute a backtrace
+     * and raise a deprecation notice, both of which end up in a log. A cron run or a CLI
+     * script has no logged-in user, and withholding a deprecation notice from it because
+     * nobody is watching would be the wrong question answered confidently.
+     *
+     * Falls back to the bare constant when debugconfig.php is absent -- the installer and
+     * the unit tests reach this class without it.
+     */
+    private static function isDebugEnabled(): bool
+    {
+        if (function_exists('xoops_isDebugEnabled')) {
+            return xoops_isDebugEnabled();
+        }
+
+        return defined('XOOPS_DEBUG') && XOOPS_DEBUG;
+    }
+
+    /**
+     * Check if a legacy IN value is a safe, parenthesized list of quoted literals.
+     * Supports both single and double quotes: ("foo","bar") or ('foo','bar')
+     */
+    private static function isSafeLegacyInList(string $raw): bool
+    {
+        $raw = trim($raw);
+
+        // 0) Empty list is valid
+        if ($raw === '()') {
+            return true;
+        }
+
+        // 1) Safe numeric list: (1,2,3) or with spaces
+        if (preg_match('/^\(\s*\d+(?:\s*,\s*\d+)*\s*\)$/', $raw)) {
+            return true;
+        }
+
+        // 2) Safe quoted list: ("foo","bar") or ('foo','bar')
+        //    Keep your existing, more complex quoted-string pattern here.
+        //    Example shape (adjust to match what you already use):
+        $pattern = '/^\(\s*'
+                   . '(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\')'
+                   . '(?:\s*,\s*(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'))*'
+                   . '\s*\)$/';
+
+        return (bool)preg_match($pattern, $raw);
+    }
+
+    /**
+     * Predicate for an empty IN / NOT IN list.
+     *
+     * MySQL rejects the literal `IN ()` with a syntax error, so an empty set
+     * renders as a constant instead: nothing is a member of the empty set, and
+     * everything is outside it.
+     *
+     * @param string $op uppercased operator, 'IN' or 'NOT IN'
+     * @return string constant predicate
+     */
+    private static function emptyInPredicate(string $op): string
+    {
+        return $op === 'IN' ? '1=0' : '1=1';
+    }
+
+    /**
+     * Render a validated legacy (preformatted string) IN list.
+     *
+     * @param string $clause rendered column reference
+     * @param string $op     uppercased operator, 'IN' or 'NOT IN'
+     * @param string $legacy validated legacy list, e.g. "(1,2,3)"
+     * @return string SQL fragment
+     */
+    private static function renderLegacyInList(string $clause, string $op, string $legacy): string
+    {
+        if (preg_match('/^\(\s*\)$/', trim($legacy))) {
+            return self::emptyInPredicate($op);
+        }
+
+        return $clause . ' ' . $op . ' ' . $legacy;
+    }
+
+    /**
+     * Set the global default for allowing inner wildcards in LIKE patterns.
+     * Useful during migrations of legacy modules that intentionally use inner wildcards.
+     *
+     * @param bool $on
+     * @return void
+     */
+    public static function setDefaultAllowInnerWildcards(bool $on = true): void
+    {
+        self::$defaultAllowInnerWildcards = $on;
+    }
+
+    /**
+     * Opt-in per instance for intentional inner wildcards in LIKE patterns.
+     * Default remains secure (inner %/_ escaped).
+     *
+     * @param bool $on
+     * @return $this
+     */
+    public function allowInnerWildcards(bool $on = true): self
+    {
+        $this->allowInnerWildcards = $on;
+        return $this;
+    }
+
+    /**
+     * Constructor
+     *
+     * @param string      $column
+     * @param mixed       $value
+     * @param string      $operator
+     * @param string|null $prefix
+     * @param string|null $function  sprintf format string, e.g. 'LOWER(%s)'
+     * @param bool        $allowEmptyValue
+     */
+    public function __construct($column, $value = '', $operator = '=', $prefix = '', $function = '', $allowEmptyValue = false)
+    {
+        $this->prefix           = $prefix;
+        $this->function         = $function;
+        $this->column           = $column;
+        $this->value            = $value;
+        $this->operator         = $operator;
+        $this->allowEmptyValue  = $allowEmptyValue;
+        $this->allowInnerWildcards = self::$defaultAllowInnerWildcards;
+
+        // Legacy always-true workaround: new Criteria(1, '1', '=') → no WHERE
+        if ((int)$column === 1 && (int)$value === 1 && $operator === '=') {
+            $this->column = '';
+            $this->value  = '';
+        }
+    }
+
+    /**
+     * Backtick-quote a column reference for safe use as an SQL identifier.
+     *
+     * Expression columns (those containing a parenthesis) are developer-supplied
+     * and returned untouched — the optional $function wrapper handles those. A
+     * plain or dotted identifier is split on '.', each segment backtick-quoted
+     * with any embedded backtick doubled, closing the identifier-breakout hole.
+     *
+     * @param string $col column name or expression
+     * @return string quoted identifier, or the original expression
+     */
+    private function quoteColumn($col)
+    {
+        $col = (string) $col;
+        if (strpos($col, '(') !== false) {
+            return $col;
+        }
+        $segments = explode('.', $col);
+        foreach ($segments as $index => $segment) {
+            $segments[$index] = '`' . str_replace('`', '``', $segment) . '`';
+        }
+
+        return implode('.', $segments);
+    }
+
+    /**
+     * Render the SQL fragment (no leading WHERE)
+     *
+     * @param \XoopsDatabase|null $db Database connection
+     * @return string SQL fragment
+     * @throws \RuntimeException if database connection is not available
+     */
+    public function render(?\XoopsDatabase $db = null)
+    {
+        // 1) Explicit injection
+        // 2) Legacy global
+        // 3) Factory (if available)
+        if ($db === null && isset($GLOBALS['xoopsDB']) && $GLOBALS['xoopsDB'] instanceof \XoopsDatabase) {
+            $db = $GLOBALS['xoopsDB'];
+        }
+
+        if ($db === null && class_exists('\XoopsDatabaseFactory')) {
+            try {
+                $db = \XoopsDatabaseFactory::getDatabaseConnection();
+            } catch (\Throwable $e) {
+                throw new \RuntimeException('Database connection required to render Criteria: ' . $e->getMessage(), 0, $e);
+            }
+        }
+
+        if (!$db) {
+            throw new \RuntimeException('Database connection required to render Criteria');
+        }
+
+        $col = (string)($this->column ?? '');
+
+        if ($col === '') {
+            return '';
+        }
+
+        $prefix = '';
+        if (!empty($this->prefix) && preg_match('/^[A-Za-z0-9_]+$/', (string) $this->prefix)) {
+            $prefix = '`' . (string) $this->prefix . '`.';
+        }
+        $clause = $prefix . $this->quoteColumn($col);
+
+        if (!empty($this->function)) {
+            $clause = sprintf($this->function, $clause);
+        }
+
+        $op = strtoupper((string)$this->operator);
+
+        // NULL operators
+        if ($op === 'IS NULL' || $op === 'IS NOT NULL') {
+            return $clause . ' ' . $op;
+        }
+
+        /**
+         * IN / NOT IN
+         */
+        if ($op === 'IN' || $op === 'NOT IN') {
+            // Modern safe path: array input
+            if (is_array($this->value)) {
+                $parts = [];
+                foreach ($this->value as $v) {
+                    // Preserve the caller's PHP type: an int becomes an SQL
+                    // integer, anything else an SQL string literal. Casting
+                    // numeric-looking strings would turn a text-column search
+                    // for '001' into `IN (1)`, which MySQL then evaluates
+                    // numerically and matches against '1', '01' and ' 1' too.
+                    // Callers holding IDs cast with (int)/array_map('intval').
+                    if (is_int($v)) {
+                        $parts[] = (string)$v;
+                    } else {
+                        $parts[] = $db->quote((string)$v);
+                    }
+                }
+
+                if ($parts === []) {
+                    return self::emptyInPredicate($op);
+                }
+
+                return $clause . ' ' . $op . ' (' . implode(',', $parts) . ')';
+            }
+
+            // Legacy format: preformatted string in parentheses
+            $legacy = (string)$this->value;
+
+            // FIRST: strict validation of legacy syntax
+            if (!self::isSafeLegacyInList($legacy)) {
+                // Malformed → treat as a single literal safely
+                return $clause . ' ' . $op . ' (' . $db->quote($legacy) . ')';
+            }
+
+            // If legacy logging is not enabled, just pass through
+            if (!self::isLegacyLogEnabled()) {
+                return self::renderLegacyInList($clause, $op, $legacy);
+            }
+
+            // Build log message
+            $message = sprintf(
+                'Legacy Criteria IN format used for column "%s" with value "%s"',
+                $this->column,
+                $legacy
+            );
+
+            // Only pay backtrace cost in debug mode
+            if (self::isDebugEnabled()) {
+                $bt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+                $caller = $bt[1] ?? [];
+                $file = $caller['file'] ?? 'unknown';
+                $line = $caller['line'] ?? 0;
+                $message .= sprintf(' at %s:%d', $file, $line);
+            }
+
+            if (class_exists('XoopsLogger')) {
+                \XoopsLogger::getInstance()
+                            ->addExtra('CriteriaLegacyIN', $message);
+            } else {
+                error_log($message);
+            }
+
+            if (self::isDebugEnabled()) {
+                trigger_error($message, E_USER_DEPRECATED);
+            }
+
+            return self::renderLegacyInList($clause, $op, $legacy);
+        }
+
+        // NOW it's safe to cast to string for other operators
+        $valStr = (string)$this->value;
+
+        // Empty value check
+        if (trim($valStr) === '' && !$this->allowEmptyValue) {
+            return '';
+        }
+
+        /**
+         * LIKE / NOT LIKE
+         * - Preserves leading/trailing % as wildcards
+         * - Escapes inner backslashes
+         * - Optionally escapes inner % and _ when allowInnerWildcards is false
+         */
+        if ($op === 'LIKE' || $op === 'NOT LIKE') {
+            $pattern = (string)$this->value;
+
+            // If pattern is only % signs, it's effectively "match everything" → no predicate
+            if ($op === 'LIKE' && $pattern !== '' && strspn($pattern, '%') === strlen($pattern)) {
+                return '';
+            }
+
+            $len     = strlen($pattern);
+            $lead    = strspn($pattern, '%');
+            $trail   = strspn(strrev($pattern), '%');
+            $coreLen = $len - $lead - $trail;
+
+            if ($coreLen <= 0) {
+                $final = $pattern;
+            } else {
+                $left  = $lead > 0 ? substr($pattern, 0, $lead) : '';
+                $core  = substr($pattern, $lead, $coreLen);
+                $right = $trail > 0 ? substr($pattern, -$trail) : '';
+
+                // Always escape backslashes in the core
+                $core = str_replace('\\', '\\\\', $core);
+
+                // If inner wildcards are NOT allowed, escape % and _ inside core
+                if (!$this->allowInnerWildcards) {
+                    $core = strtr($core, [
+                        '%' => '\\%',
+                        '_' => '\\_',
+                    ]);
+                }
+
+                $final = $left . $core . $right;
+            }
+
+            $quoted = $db->quote($final);
+            return $clause . ' ' . $op . ' ' . $quoted;
+        }
+
+        /**
+         * All other operators: =, <, >, <=, >=, !=, <>
+         */
+
+        // Backtick bypass for column-to-column comparisons
+        $len = strlen($valStr);
+        if ($len > 2 && $valStr[0] === '`' && $valStr[$len - 1] === '`') {
+            $inner = substr($valStr, 1, -1);
+
+            // Allow alphanumeric, underscore, dot, and dollar sign
+            // (valid in MySQL identifiers when backticked, incl. db.table)
+            if (preg_match('/^[a-zA-Z0-9_.$\\-]+$/', $inner)) {
+                $safeValue = $valStr;
+        } else {
+                // Old behavior: empty backticks on invalid identifier content
+                $safeValue = '``';
+            }
+        } else {
+            // Regular value - keep integers numeric; quote strings
+            if (is_int($this->value) || (is_string($this->value) && preg_match('/^-?\d+$/', $this->value))) {
+                $safeValue = (string)(int)$this->value;
+            } else {
+                $safeValue = $db->quote((string)$this->value);
+            }
+        }
+
+        // Allowlist the comparison operator: everything reaching this point
+        // must be one of the scalar comparison operators. Anything else (e.g.
+        // an operator string carrying an injected "OR 1=1") collapses to '='.
+        $comparisonOperators = ['=', '!=', '<>', '<', '>', '<=', '>='];
+        if (!in_array($op, $comparisonOperators, true)) {
+            $op = '=';
+        }
+
+        return $clause . ' ' . $op . ' ' . $safeValue;
+    }
+
+    /**
+     * Render with leading WHERE clause
+     *
+     * @param \XoopsDatabase|null $db Database connection
+     * @return string SQL WHERE clause or empty string
+     */
+    public function renderWhere(?\XoopsDatabase $db = null)
+    {
+        $cond = $this->render($db);
+        return empty($cond) ? '' : "WHERE {$cond}";
+    }
+
+    /**
+     * Generate an LDAP filter from criteria
+     *
+     * @return string LDAP filter
+     */
+    public function renderLdap()
+    {
+        // Allowlist the attribute name and escape every value for the LDAP
+        // filter context (mirrors the SQL render() escaping discipline).
+        $attribute = preg_match('/^[A-Za-z0-9_.-]+$/', (string) $this->column) ? (string) $this->column : '';
+
+        // Fail closed: an invalid/empty attribute would otherwise build a
+        // malformed filter such as "(=value)"; emit no predicate instead.
+        if ($attribute === '') {
+            return '';
+        }
+
+        $escape = static function ($value) {
+            if (function_exists('ldap_escape')) {
+                return ldap_escape((string) $value, '', LDAP_ESCAPE_FILTER);
+            }
+
+            return addcslashes((string) $value, "\\*()\0");
+        };
+
+        if ($this->operator === '>') {
+            $this->operator = '>=';
+        }
+        if ($this->operator === '<') {
+            $this->operator = '<=';
+        }
+
+        if ($this->operator === '!=' || $this->operator === '<>') {
+            $clause = '(!(' . $attribute . '=' . $escape($this->value) . '))';
+        } else {
+            if ($this->operator === 'IN') {
+                $newvalue = str_replace(['(', ')'], '', (string) $this->value);
+                $tab      = explode(',', $newvalue);
+                $clause = '';
+                foreach ($tab as $uid) {
+                    $clause .= '(' . $attribute . '=' . $escape(trim($uid)) . ')';
+                }
+                $clause = '(|' . $clause . ')';
+            } else {
+                $ldapOperators = ['=', '>=', '<=', '~='];
+                $op            = in_array($this->operator, $ldapOperators, true) ? $this->operator : '=';
+                $clause        = '(' . $attribute . $op . $escape($this->value) . ')';
+            }
+        }
+
+        return $clause;
+    }
+}

@@ -1,0 +1,135 @@
+<?php
+/**
+ * XOOPS restricted file access
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             core
+ * @since               2.4.0
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ */
+
+defined('DS') or define('DS', DIRECTORY_SEPARATOR);
+defined('NWLINE') or define('NWLINE', "\n");
+
+$xoopsOption['nocommon'] = true;
+require_once __DIR__ . DS . 'mainfile.php';
+
+error_reporting(0);
+
+include_once XOOPS_ROOT_PATH . DS . 'include' . DS . 'defines.php';
+include_once XOOPS_ROOT_PATH . DS . 'include' . DS . 'version.php';
+require_once XOOPS_ROOT_PATH . DS . 'class' . DS . 'xoopsload.php';
+
+XoopsLoad::load('xoopskernel');
+$xoops = new xos_kernel_Xoops2();
+$xoops->pathTranslation();
+
+// Fetch path from query string if path is not set, i.e. through a direct request
+$rawQueryString = \Xmf\Request::getString('QUERY_STRING', '', 'SERVER', \Xmf\Request::MASK_ALLOW_RAW);
+if (!isset($path) && $rawQueryString !== '') {
+    $path      = $rawQueryString;
+    $path      = (substr($path, 0, 1) === '/') ? substr($path, 1) : $path;
+    $path_type = substr($path, 0, strpos($path, '/'));
+    if (!isset($xoops->paths[$path_type])) {
+        $path      = 'XOOPS/' . $path;
+        $path_type = 'XOOPS';
+    }
+}
+
+//We are not allowing output of xoops_data
+if ($path_type === 'var') {
+    http_response_code(404);
+    exit();
+}
+
+$file = realpath($xoops->path($path));
+$dir  = realpath($xoops->paths[$path_type][0]);
+
+//We are not allowing directory traversal either: the resolved file must sit
+//inside the resolved root. Require a path-boundary match, not a substring
+//match (which a sibling directory sharing the root's name prefix would pass).
+$dirPrefix = rtrim((string) $dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+if (false === $file || false === $dir
+    || !str_starts_with($file . DIRECTORY_SEPARATOR, $dirPrefix)) {
+    http_response_code(404);
+    exit();
+}
+
+//We can't output empty files and php files do not output
+if (empty($file) || strpos($file, '.php') !== false) {
+    http_response_code(404);
+    exit();
+}
+
+$file = $xoops->path($path);
+// Is there really a file to output?
+if (!file_exists($file)) {
+    http_response_code(404);
+    exit();
+}
+
+$ext   = substr($file, strrpos($file, '.') + 1);
+$types = include $xoops->path('include/mimetypes.inc.php');
+//$content_type = isset($types[$ext]) ? $types[$ext] : 'text/plain';
+//Do not output garbage
+if (!isset($types[$ext])) {
+    http_response_code(404);
+    exit();
+}
+
+//Output now
+// seconds, minutes, hours, days
+$expires = 60 * 60 * 24 * 15;
+// "max-age" carries a hyphen (RFC 9111 5.2.2.1). This line sent "maxage=", which
+// is not a directive at all, and unrecognised directives are ignored -- so caches
+// reading Cache-Control saw no lifetime, and only the Expires header below kept
+// these assets cacheable. "public" replaces the former Pragma: public, which
+// never had any defined meaning as a response header.
+header('Cache-Control: public, max-age=' . $expires);
+header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $expires) . ' GMT');
+header('Content-type: ' . $types[$ext]);
+
+// Emit SourceMap header for JS/CSS files when a companion .map file exists.
+// Browsers cannot resolve relative sourceMappingURL references inside files
+// served through browse.php, so the SourceMap header provides the correct path.
+if (in_array($ext, ['js', 'css'], true)) {
+    $fileDir = dirname($file);
+    $fsize = filesize($file);
+    $tailSize = min(512, $fsize);
+    $tail = '';
+    $fh = fopen($file, 'rb');
+    if ($fh !== false) {
+        fseek($fh, $fsize - $tailSize);
+        $tail = fread($fh, $tailSize);
+        fclose($fh);
+    }
+    if ($tail !== '' && preg_match('/[#@]\s*sourceMappingURL=(\S+)/', $tail, $m)) {
+        $mapName = basename($m[1]);
+        if (file_exists($fileDir . '/' . $mapName)) {
+            $origPath = (substr($rawQueryString, 0, 1) === '/') ? substr($rawQueryString, 1) : $rawQueryString;
+            // Reject CR/LF to prevent header injection
+            if (strpbrk($origPath, "\r\n") === false) {
+                $origDir = dirname($origPath);
+                $baseUrl = rtrim(XOOPS_URL, '/');
+                $mapPath = ($origDir === '.' ? $mapName : $origDir . '/' . $mapName);
+                $encodedMapPath = implode('/', array_map('rawurlencode', explode('/', $mapPath)));
+                header('SourceMap: ' . $baseUrl . '/browse.php?' . $encodedMapPath);
+            }
+        }
+    }
+}
+$handle = fopen($file, 'rb');
+while (!feof($handle)) {
+    $buffer = fread($handle, 4096);
+    echo $buffer;
+}
+fclose($handle);
+exit();

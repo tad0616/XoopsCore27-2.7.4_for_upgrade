@@ -1,0 +1,110 @@
+<?php
+/*
+ You may not change or alter any portion of this comment or credits
+ of supporting developers from this source code or any supporting source code
+ which is considered copyrighted (c) material of the original comment or credit authors.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+*/
+
+/**
+ * Load mainfile.php wedge that checks for needed upgrades.
+ *
+ * This should be included instead of mainfile.php.
+ *
+ * @copyright (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license   GNU GPL 2.0 or later (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @since     2.5.9
+ * @author    Richard Griffith <richard@geekwright.com>
+ * @author    XOOPS Development Team
+ */
+
+$loadCommon             = !isset($xoopsOption['nocommon']);
+$xoopsOption['nocommon'] = true;
+
+$rootDir  = realpath(dirname(__DIR__));
+$mainfile = $rootDir !== false ? realpath($rootDir . DIRECTORY_SEPARATOR . 'mainfile.php') : false;
+if (
+    $rootDir === false
+    || $mainfile === false
+    || !is_file($mainfile)
+    || !str_starts_with($mainfile, $rootDir . DIRECTORY_SEPARATOR)
+) {
+    exit('mainfile.php not found.');
+}
+include_once $mainfile;
+
+if (!defined('XOOPS_ROOT_PATH')) {
+    exit('Bad installation: XOOPS_ROOT_PATH is not defined in mainfile.php.');
+}
+
+$mainfileKeys = [
+    // in mainfile.php
+    'XOOPS_ROOT_PATH'       => null,
+    'XOOPS_PATH'            => null,
+    'XOOPS_VAR_PATH'        => null, // *
+    'XOOPS_TRUST_PATH'      => null,
+    'XOOPS_URL'             => null,
+    'XOOPS_COOKIE_DOMAIN'   => null, // *
+    'XOOPS_PROT'            => null, // *
+    'XOOPS_GROUP_ADMIN'     => null,
+    'XOOPS_GROUP_USERS'     => null,
+    'XOOPS_GROUP_ANONYMOUS' => null,
+    // in data/secure.php
+    'XOOPS_DB_TYPE'         => null,
+    'XOOPS_DB_CHARSET'      => null,
+    'XOOPS_DB_PREFIX'       => null,
+    'XOOPS_DB_HOST'         => null,
+    'XOOPS_DB_USER'         => null,
+    'XOOPS_DB_PASS'         => null,
+    'XOOPS_DB_NAME'         => null,
+    'XOOPS_DB_PCONNECT'     => null,
+];
+
+$needMainfileRewrite = false;
+foreach ($mainfileKeys as $key => $unused) {
+    if (defined($key)) {
+        $mainfileKeys[$key] = constant($key);
+    } else {
+        $needMainfileRewrite = true;
+    }
+}
+
+// this is a generated define in a current mainfile, so just define it if it doesn't exist
+unset ($mainfileKeys['XOOPS_PROT']);
+if (!defined('XOOPS_PROT')) {
+    $parts = parse_url(XOOPS_URL);
+    $http = (empty($parts['scheme']) ? 'http' : $parts['scheme']) . '://';
+    define('XOOPS_PROT', $http);
+    unset($parts, $http);
+}
+
+/**
+ * True when $user is an active member of the webmaster group.
+ *
+ * The wizard is an administrative tool that rewrites templates and the
+ * schema. Module-level admin rights (XoopsUser::isAdmin()) can be delegated
+ * per category and are not enough; every entry point applies this one check.
+ *
+ * @param mixed $user the current user object, or '' / null when anonymous
+ * @return bool
+ */
+function xoops_upgrade_user_is_webmaster($user): bool
+{
+    if (!is_object($user) || (int) $user->getVar('level') <= 0) {
+        return false;
+    }
+    $groups = $user->getGroups();
+
+    return is_array($groups) && in_array((int) XOOPS_GROUP_ADMIN, array_map('intval', $groups), true);
+}
+
+// we have what we need so continue
+if ($loadCommon) {
+    unset($xoopsOption['nocommon']);
+    include XOOPS_ROOT_PATH . '/include/common.php';
+}
+
+unset($loadCommon);

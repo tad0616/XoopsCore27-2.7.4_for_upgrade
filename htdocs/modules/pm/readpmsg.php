@@ -1,0 +1,275 @@
+<?php
+/**
+ * Private message module
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             pm
+ * @since               2.3.0
+ * @author              Jan Pedersen
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ */
+
+use Xmf\Request;
+
+include_once dirname(__DIR__, 2) . '/mainfile.php';
+
+if (!is_object($GLOBALS['xoopsUser'])) {
+    redirect_header(XOOPS_URL, 3, _NOPERM);
+}
+$valid_op_requests = ['out', 'save', 'in'];
+$op                = Request::hasVar('op', 'POST') ? Request::getCmd('op', 'in', 'POST') : Request::getCmd('op', 'in', 'GET');
+if (!in_array($op, $valid_op_requests)) {
+    $op = 'in';
+}
+$msg_id            = Request::hasVar('msg_id', 'POST') ? Request::getInt('msg_id', 0, 'POST') : Request::getInt('msg_id', 0, 'GET');
+// xoops_getModuleHandler() has two failure modes (htdocs/include/functions.php):
+//   - throws \Exception("No Module is loaded") when no $module_dir is passed
+//     and there is no $xoopsModule context (e.g. direct script entry without
+//     normal module bootstrap)
+//   - throws \Exception("Handler does not exist") when the handler class
+//     can't be resolved (unless $optional = true, which we don't pass)
+// Wrap in try/catch so neither path produces an uncaught exception. Then
+// annotate the handler for static-analysis type narrowing of the
+// PM-specific methods (setTodelete etc.) used below.
+//
+// In the "No Module is loaded" case the PM language file may not be loaded
+// yet, so _MD_PM_ACTION_ERROR can itself fatal as an undefined constant on
+// PHP 8+. Try to load the PM main language file, then resolve a safe
+// fallback BEFORE the try/catch so both redirect paths can rely on it.
+if (!defined('_MD_PM_ACTION_ERROR')) {
+    xoops_loadLanguage('main', 'pm');
+}
+$pmActionError = defined('_MD_PM_ACTION_ERROR') ? constant('_MD_PM_ACTION_ERROR') : 'Operation failed';
+try {
+    /** @var PmMessageHandler $pm_handler */
+    $pm_handler = xoops_getModuleHandler('message');
+} catch (\Throwable $e) {
+    // Prefix with basename(__FILE__) so the log line is traceable without
+    // exposing the absolute server path.
+    trigger_error(basename(__FILE__) . ': PM module handler unavailable: ' . $e->getMessage(), E_USER_WARNING);
+    redirect_header(XOOPS_URL, 2, $pmActionError);
+}
+$pm                = null;
+if ($msg_id > 0) {
+    $pm = $pm_handler->get($msg_id);
+}
+
+if (is_object($pm) && ($pm->getVar('from_userid') != $GLOBALS['xoopsUser']->getVar('uid')) && ($pm->getVar('to_userid') != $GLOBALS['xoopsUser']->getVar('uid'))) {
+    redirect_header(XOOPS_URL . '/modules/' . $GLOBALS['xoopsModule']->getVar('dirname', 'n') . '/index.php', 2, _NOPERM);
+}
+
+if (is_object($pm) && Request::hasVar('action', 'POST')) {
+    if (!$GLOBALS['xoopsSecurity']->check()) {
+        echo implode('<br>', $GLOBALS['xoopsSecurity']->getErrors());
+        exit();
+    }
+    $res = false;
+    if (Request::hasVar('email_message', 'POST')) {
+        $res = $pm_handler->sendEmail($pm, $GLOBALS['xoopsUser']);
+    } elseif (Request::hasVar('move_message', 'POST') && $op !== 'save' && !$GLOBALS['xoopsUser']->isAdmin() && $pm_handler->getSavecount() >= $GLOBALS['xoopsModuleConfig']['max_save']) {
+        $res_message = sprintf(_MD_PM_SAVED_PART, $GLOBALS['xoopsModuleConfig']['max_save'], 0);
+    } else {
+        switch ($op) {
+            case 'out':
+                if ($pm->getVar('from_userid') != $GLOBALS['xoopsUser']->getVar('uid')) {
+                    break;
+                }
+                if (Request::hasVar('delete_message', 'POST')) {
+                    $res = $pm_handler->setFromdelete($pm);
+                } elseif (Request::hasVar('move_message', 'POST')) {
+                    $res = $pm_handler->setFromsave($pm);
+                }
+                break;
+            case 'save':
+                // Collect each operation's result into an array instead of
+                // assigning to $res1 / $res2 conditionally. The previous
+                // form only initialised those vars when an inner branch
+                // fired, then computed `$res = $res1 && $res2`
+                // unconditionally — raising "Undefined variable" warnings
+                // (and a wrong $res value) whenever a sender or recipient
+                // branch was skipped.
+                //
+                // Delete-vs-save sequencing: setTodelete() / setFromdelete()
+                // call parent::delete($pm) (real row removal) when the
+                // OTHER party has already deleted; in that case the row no
+                // longer exists by the time we'd call setTosave($pm, 0)
+                // and the UPDATE would affect 0 rows — which the handler
+                // reports as failure. Treat a successful delete as
+                // success and skip the save-flag follow-up entirely.
+                // Predict whether each setTodelete / setFromdelete will hard-
+                // delete the row vs. just toggle a flag, based on the SAME
+                // predicates the handler itself uses (pm/class/message.php).
+                // This avoids a follow-up SELECT after the delete to detect
+                // row removal — and avoids conflating "row gone" with
+                // "SELECT failed" (get() returns null in both cases).
+                //   setTodelete  hard-deletes when (from_delete != 0 && from_userid != 0)
+                //   setFromdelete hard-deletes when (to_delete   != 0)
+                // No-op-as-success for save-flag clears: updateAll() returns
+                // false for 0 affected rows, so calling setTosave($pm, 0)
+                // when to_save is already 0 (or setFromsave($pm, 0) when
+                // from_save is already 0) reports failure for what is
+                // really a no-op. This bites self-messages and any PM
+                // that's in the savebox only because of the OTHER side's
+                // save flag. Treat the already-zero case as success.
+                $saveResults    = [];
+                $messageDeleted = false;
+                if ($pm->getVar('to_userid') == $GLOBALS['xoopsUser']->getVar('uid')) {
+                    if (Request::hasVar('delete_message', 'POST')) {
+                        $willHardDelete = ((int) $pm->getVar('from_delete') !== 0)
+                            && ((int) $pm->getVar('from_userid') !== 0);
+                        $res1 = $pm_handler->setTodelete($pm);
+                        if ($res1 && $willHardDelete) {
+                            // Row removed — save-flag follow-up is moot.
+                            $saveResults[]  = true;
+                            $messageDeleted = true;
+                        } elseif ($res1) {
+                            $saveResults[] = ((int) $pm->getVar('to_save') === 0)
+                                ? true
+                                : (bool) $pm_handler->setTosave($pm, 0);
+                        } else {
+                            $saveResults[] = false;
+                        }
+                    } elseif (Request::hasVar('move_message', 'POST')) {
+                        $saveResults[] = ((int) $pm->getVar('to_save') === 0)
+                            ? true
+                            : (bool) $pm_handler->setTosave($pm, 0);
+                    }
+                }
+                // Self-message safety: if from_userid == to_userid == current uid,
+                // the recipient branch above may already have deleted the row
+                // (or set to_delete=1, which makes the sender branch's
+                // setFromdelete then hard-delete). Skip the sender branch
+                // entirely once we know the row is gone, otherwise its
+                // setFromsave UPDATE would affect 0 rows and updateAll()
+                // would report that as failure.
+                if (!$messageDeleted && $pm->getVar('from_userid') == $GLOBALS['xoopsUser']->getVar('uid')) {
+                    if (Request::hasVar('delete_message', 'POST')) {
+                        $willHardDelete = ((int) $pm->getVar('to_delete') !== 0);
+                        $res2 = $pm_handler->setFromdelete($pm);
+                        if ($res2 && $willHardDelete) {
+                            $saveResults[]  = true;
+                            $messageDeleted = true;
+                        } elseif ($res2) {
+                            $saveResults[] = ((int) $pm->getVar('from_save') === 0)
+                                ? true
+                                : (bool) $pm_handler->setFromsave($pm, 0);
+                        } else {
+                            $saveResults[] = false;
+                        }
+                    } elseif (Request::hasVar('move_message', 'POST')) {
+                        $saveResults[] = ((int) $pm->getVar('from_save') === 0)
+                            ? true
+                            : (bool) $pm_handler->setFromsave($pm, 0);
+                    }
+                }
+                $res = !empty($saveResults) && !in_array(false, $saveResults, true);
+                break;
+
+            case 'in':
+            default:
+                if ($pm->getVar('to_userid') != $GLOBALS['xoopsUser']->getVar('uid')) {
+                    break;
+                }
+                if (Request::hasVar('delete_message', 'POST')) {
+                    $res = $pm_handler->setTodelete($pm);
+                } elseif (Request::hasVar('move_message', 'POST')) {
+                    $res = $pm_handler->setTosave($pm);
+                }
+                break;
+        }
+    }
+    $res_message ??= $res ? _MD_PM_ACTION_DONE : $pmActionError;
+    redirect_header('viewpmsg.php?op=' . htmlspecialchars($op, ENT_QUOTES | ENT_HTML5), 2, $res_message);
+}
+$start                        = Request::getInt('start', 0, 'GET');
+$total_messages               = Request::getInt('total_messages', 0, 'GET');
+$GLOBALS['xoopsOption']['template_main'] = 'pm_readpmsg.tpl';
+include $GLOBALS['xoops']->path('header.php');
+
+if (!is_object($pm)) {
+    if ($op === 'out') {
+        $criteria = new CriteriaCompo(new Criteria('from_delete', 0));
+        $criteria->add(new Criteria('from_userid', $GLOBALS['xoopsUser']->getVar('uid')));
+        $criteria->add(new Criteria('from_save', 0));
+    } elseif ($op === 'save') {
+        $crit_to = new CriteriaCompo(new Criteria('to_delete', 0));
+        $crit_to->add(new Criteria('to_save', 1));
+        $crit_to->add(new Criteria('to_userid', $GLOBALS['xoopsUser']->getVar('uid')));
+        $crit_from = new CriteriaCompo(new Criteria('from_delete', 0));
+        $crit_from->add(new Criteria('from_save', 1));
+        $crit_from->add(new Criteria('from_userid', $GLOBALS['xoopsUser']->getVar('uid')));
+        $criteria = new CriteriaCompo($crit_to);
+        $criteria->add($crit_from, 'OR');
+    } else {
+        $criteria = new CriteriaCompo(new Criteria('to_delete', 0));
+        $criteria->add(new Criteria('to_userid', $GLOBALS['xoopsUser']->getVar('uid')));
+        $criteria->add(new Criteria('to_save', 0));
+    }
+
+    $criteria->setLimit(1);
+    $criteria->setStart($start);
+    $criteria->setSort('msg_time');
+    $criteria->setOrder('DESC');
+    // Avoid destructuring the result directly — getObjects() can return
+    // an empty array, in which case `[$pm] = []` raises "Undefined array
+    // key 0" on PHP 8 and leaves $pm undefined. The explicit fallback
+    // keeps $pm at null so the `is_object($pm)` guard below handles it.
+    $pmObjects = $pm_handler->getObjects($criteria);
+    $pm        = $pmObjects[0] ?? null;
+}
+
+include_once $GLOBALS['xoops']->path('class/xoopsformloader.php');
+
+$pmform  = new XoopsForm('', 'pmform', 'readpmsg.php', 'post', true);
+$message = null;
+if (is_object($pm) && !empty($pm)) {
+    if ($pm->getVar('from_userid') != $GLOBALS['xoopsUser']->getVar('uid')) {
+        $reply_button = new XoopsFormButton('', 'send', _MD_PM_REPLY);
+        $reply_button->setExtra("onclick='javascript:openWithSelfMain(\"" . XOOPS_URL . '/modules/pm/pmlite.php?reply=1&msg_id=' . $pm->getVar('msg_id') . "\", \"pmlite\", 565,500);'");
+        $pmform->addElement($reply_button);
+    }
+    $pmform->addElement(new XoopsFormButton('', 'delete_message', _MD_PM_DELETE, 'submit'));
+    $pmform->addElement(new XoopsFormButton('', 'move_message', ($op === 'save') ? _MD_PM_UNSAVE : _MD_PM_TOSAVE, 'submit'));
+    $pmform->addElement(new XoopsFormButton('', 'email_message', _MD_PM_EMAIL, 'submit'));
+    $pmform->addElement(new XoopsFormHidden('msg_id', $pm->getVar('msg_id')));
+    $pmform->addElement(new XoopsFormHidden('op', $op));
+    $pmform->addElement(new XoopsFormHidden('action', 1));
+    $pmform->assign($GLOBALS['xoopsTpl']);
+
+    if ($pm->getVar('from_userid') == $GLOBALS['xoopsUser']->getVar('uid')) {
+        $poster = new XoopsUser($pm->getVar('to_userid'));
+    } else {
+        $poster = new XoopsUser($pm->getVar('from_userid'));
+    }
+    if (!is_object($poster)) {
+        $GLOBALS['xoopsTpl']->assign('poster', false);
+        $GLOBALS['xoopsTpl']->assign('anonymous', $xoopsConfig['anonymous']);
+    } else {
+        $GLOBALS['xoopsTpl']->assign('poster', $poster);
+    }
+
+    if ($pm->getVar('to_userid') == $GLOBALS['xoopsUser']->getVar('uid') && $pm->getVar('read_msg') == 0) {
+        $pm_handler->setRead($pm);
+    }
+
+    $message              = $pm->getValues();
+    $message['msg_time']  = formatTimestamp($pm->getVar('msg_time'));
+    // Pass the raw filename — the template applies `|escape:'url'` since the
+    // value is rendered into an <img src="..."> attribute (URL context).
+    $message['msg_image'] = (string) $message['msg_image'];
+}
+$GLOBALS['xoopsTpl']->assign('message', $message);
+$GLOBALS['xoopsTpl']->assign('op', $op);
+$GLOBALS['xoopsTpl']->assign('previous', $start - 1);
+$GLOBALS['xoopsTpl']->assign('next', $start + 1);
+$GLOBALS['xoopsTpl']->assign('total_messages', $total_messages);
+
+include $GLOBALS['xoops']->path('footer.php');

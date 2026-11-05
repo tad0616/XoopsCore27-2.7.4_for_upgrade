@@ -1,0 +1,11 @@
+cp -fr XOOPS_ROOT_PATH/uploads/tad_adm/upgrade/htdocs/* XOOPS_ROOT_PATH/
+cp -fr XOOPS_ROOT_PATH/uploads/tad_adm/upgrade/xoops_data/* XOOPS_VAR_PATH/
+cp -fr XOOPS_ROOT_PATH/uploads/tad_adm/upgrade/xoops_lib/* XOOPS_PATH/
+chmod -R 755 XOOPS_ROOT_PATH
+chmod -R 777 XOOPS_ROOT_PATH/uploads
+chmod -R 777 XOOPS_VAR_PATH
+chmod 777 XOOPS_ROOT_PATH/mainfile.php
+rm -fr XOOPS_ROOT_PATH/modules/system/themes/legacy
+rm -fr XOOPS_ROOT_PATH/uploads/tad_adm/upgrade
+rm -fr NEW_FILE
+date +"%Y-%m-%d %H:%M:%S" > XOOPS_ROOT_PATH/uploads/xoops_sn_XOOPS_SN.txt

@@ -1,0 +1,748 @@
+<?php
+/**
+ * Xoops Logger handlers - component main class file
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package             kernel
+ * @subpackage          logger
+ * @since               2.3.0
+ * @author              Kazumi Ono  <onokazu@xoops.org>
+ * @author              Skalpa Keo <skalpa@xoops.org>
+ * @author              Taiwen Jiang <phppp@users.sourceforge.net>
+ *
+ * @todo                Not well written, just keep as it is. Refactored in 3.0
+ */
+defined('XOOPS_ROOT_PATH') || exit('Restricted access');
+
+/**
+ * Collects information for a page request
+ *
+ * Records information about database queries, blocks, and execution time
+ * and can display it as HTML. It also catches php runtime errors.
+ *
+ * @package kernel
+ */
+class XoopsLogger
+{
+    /**
+     * *#@+
+     *
+     * @var array
+     */
+    public $queries    = [];
+    public $blocks     = [];
+    public $extra      = [];
+    public $logstart   = [];
+    public $logend     = [];
+    public $errors     = [];
+    public $deprecated = [];
+    /**
+     * *#@-
+     */
+
+    public $usePopup  = false;
+    public $activated = true;
+
+    /**
+     * *@access protected
+     */
+    public $renderingEnabled = false;
+
+    /**
+     * Registered sub-loggers (composite pattern, ported from XOOPS 2.6)
+     * @var object[]
+     */
+    private $loggers = [];
+
+    /**
+     * XoopsLogger::__construct()
+     */
+    public function __construct()
+    {}
+
+    /**
+     * Register a sub-logger to receive dispatched log entries.
+     * Ported from XOOPS 2.6 Logger::addLogger() composite pattern.
+     *
+     * The logger must be an object with a log($level, $message, $context) method.
+     *
+     * @param object $logger  a PSR-3 compatible logger instance
+     * @return void
+     */
+    public function addLogger($logger)
+    {
+        if (is_object($logger) && method_exists($logger, 'log')) {
+            $this->loggers[] = $logger;
+        }
+    }
+
+    /**
+     * Get all registered loggers
+     *
+     * @return object[]
+     */
+    public function getLoggers()
+    {
+        return $this->loggers;
+    }
+
+    /**
+     * PSR-3 compatible log method. Dispatches to all registered loggers.
+     *
+     * @param mixed  $level    PSR-3 log level
+     * @param string $message  log message
+     * @param array  $context  context array, may include 'channel' key for routing
+     * @return void
+     */
+    public function log($level, $message, array $context = [])
+    {
+        foreach ($this->loggers as $logger) {
+            try {
+                $logger->log($level, $message, $context);
+            } catch (\Throwable $e) {
+                // Silently ignore logger errors to prevent cascading failures
+            }
+        }
+    }
+
+    /**
+     * Suppress output from registered loggers (e.g. during AJAX requests).
+     * Calls quiet() on each logger that supports it.
+     *
+     * @return void
+     */
+    public function quiet()
+    {
+        foreach ($this->loggers as $logger) {
+            if (method_exists($logger, 'quiet')) {
+                try {
+                    $logger->quiet();
+                } catch (\Throwable $e) {
+                    // Silently ignore logger errors to prevent cascading failures
+                }
+            }
+        }
+    }
+
+    /**
+     * Deprecated, use getInstance() instead
+     */
+    public function instance()
+    {
+        return XoopsLogger::getInstance();
+    }
+
+    /**
+     * Get a reference to the only instance of this class
+     *
+     * @return object XoopsLogger  reference to the only instance
+     */
+    public static function getInstance()
+    {
+        static $instance;
+        if (!isset($instance)) {
+            $instance = new XoopsLogger();
+            // Always catch errors, for security reasons
+            set_error_handler('XoopsErrorHandler_HandleError');
+            // grab any uncaught exception
+            set_exception_handler([$instance, 'handleException']);
+        }
+
+        return $instance;
+    }
+
+    /**
+     * Enable logger output rendering
+     * When output rendering is enabled, the logger will insert its output within the page content.
+     * If the string <!--{xo-logger-output}--> is found in the page content, the logger output will
+     * replace it, otherwise it will be inserted after all the page output.
+     */
+    public function enableRendering()
+    {
+        if (!$this->renderingEnabled) {
+            ob_start([ &$this, 'render']);
+            $this->renderingEnabled = true;
+        }
+    }
+
+    /**
+     * Returns the current microtime in seconds.
+     *
+     * @return float
+     */
+    public function microtime()
+    {
+        /** @var array $now */
+        $now = explode(' ', microtime());
+
+        return (float) $now[0] + (float) $now[1];
+    }
+
+    /**
+     * Start a timer
+     *
+     * @param string $name name of the timer
+     */
+    public function startTime($name = 'XOOPS')
+    {
+        if ($this->activated) {
+            $this->logstart[$name] = $this->microtime();
+        }
+    }
+
+    /**
+     * Stop a timer
+     *
+     * @param string $name name of the timer
+     */
+    public function stopTime($name = 'XOOPS')
+    {
+        if ($this->activated) {
+            $this->logend[$name] = $this->microtime();
+        }
+    }
+
+    /**
+     * Log a database query
+     *
+     * @param string $sql   SQL string
+     * @param string|null $error error message (if any)
+     * @param int|null    $errno error number (if any)
+     * @param float|null   $query_time
+     */
+    public function addQuery($sql, $error = null, $errno = null, $query_time = null)
+    {
+        if ($this->activated) {
+            $this->queries[] = ['sql' => $sql, 'error' => $error, 'errno' => $errno, 'query_time' => $query_time];
+        }
+        // Dispatch raw SQL to registered loggers; sub-loggers format from context
+        $this->log($error ? 'error' : 'debug', $sql, [
+            'channel'    => 'Queries',
+            'sql'        => $sql,
+            'error'      => $error,
+            'errno'      => $errno,
+            'query_time' => $query_time,
+        ]);
+    }
+
+    /**
+     * Log display of a block
+     *
+     * @param string $name      name of the block
+     * @param bool   $cached    was the block cached?
+     * @param int    $cachetime cachetime of the block
+     */
+    public function addBlock($name, $cached = false, $cachetime = 0)
+    {
+        if ($this->activated) {
+            $this->blocks[] = ['name' => $name, 'cached' => $cached, 'cachetime' => $cachetime];
+        }
+        // Dispatch raw block name to registered loggers; sub-loggers format from context
+        $this->log('debug', $name, [
+            'channel'   => 'Blocks',
+            'name'      => $name,
+            'cached'    => $cached,
+            'cachetime' => $cachetime,
+        ]);
+    }
+
+    /**
+     * Log extra information
+     *
+     * @param string $name name for the entry
+     * @param int    $msg  text message for the entry
+     */
+    public function addExtra($name, $msg)
+    {
+        if ($this->activated) {
+            $this->extra[] = ['name' => $name, 'msg' => $msg];
+        }
+        // Dispatch raw msg to registered loggers; sub-loggers format from context
+        $this->log('debug', $msg, [
+            'channel' => 'Extra',
+            'name'    => $name,
+            'msg'     => $msg,
+        ]);
+    }
+
+    /**
+     * Log messages for deprecated functions
+     *
+     * this was deprecated, but is still in broad use?
+     *
+     * @param string $msg text message for the entry
+     *
+     */
+    public function addDeprecated($msg)
+    {
+        if ($this->activated) {
+            // Deployment roots to strip, resolved once. Guarded so a deprecation raised
+            // before mainfile.php finishes cannot turn into an "Undefined constant" fatal
+            // of its own.
+            $paths = [];
+            foreach (['XOOPS_VAR_PATH', 'XOOPS_PATH', 'XOOPS_ROOT_PATH'] as $pathConstant) {
+                if (defined($pathConstant)) {
+                    $paths[] = constant($pathConstant);
+                }
+            }
+
+            $backTrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+            $miniTrace = "<br> trace: ";
+            foreach ($backTrace as $i => $trace) {
+                // Check if 'file' and 'line' exist in the current trace step
+                $file = $trace['file'] ?? '(unknown file)';
+                $line = $trace['line'] ?? '(unknown line)';
+
+                // Strip the deployment root BEFORE escaping. Doing it afterwards, on the
+                // finished string, silently stops matching when an installation path
+                // contains a character htmlspecialchars rewrites -- /var/www/AT&T/... is
+                // escaped to AT&amp;T, the raw root no longer matches, and the full server
+                // path is published in the debug panel.
+                if ([] !== $paths) {
+                    $file = str_replace($paths, '', (string) $file);
+                }
+
+                // Escaped as each value enters the markup. The string is stored
+                // pre-rendered, mixing these values with the <br> separators, and
+                // render.php emits it as raw HTML -- so escaping cannot be deferred to
+                // the renderer without destroying the separators.
+                $miniTrace .= htmlspecialchars((string) $file, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . ':' . htmlspecialchars((string) $line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '<br>';
+            }
+
+            // $msg is escaped here, not in render.php. The array entry is a pre-rendered
+            // HTML fragment -- caller text followed by the <br>-separated trace above --
+            // so the renderer cannot tell the two apart and escaping there would either
+            // miss the message or destroy the trace markup.
+            $this->deprecated[] = htmlspecialchars((string) $msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . $miniTrace;
+        }
+
+        // Dispatched OUTSIDE the activated guard, matching addQuery/addBlock/addExtra.
+        // activated gates the in-memory collectors that feed the in-page dump; a
+        // registered logger writing to a file has nothing to do with that, and a
+        // file-logging-only configuration switches the collectors off to save memory.
+        //
+        // Dispatched with the RAW message: a file or PSR-3 logger wants the text, not the
+        // HTML entities the panel entry above needs.
+        $this->log('warning', $msg, ['channel' => 'Deprecated']);
+    }
+
+    /**
+     * Error handling callback (called by the zend engine)
+     *
+     * @param integer $errno
+     * @param string  $errstr
+     * @param string  $errfile
+     * @param string  $errline
+     * @param array|null $trace
+     */
+    public function handleError($errno, $errstr, $errfile, $errline, $trace = null, $exceptionClass = null)
+    {
+        if ($errno & error_reporting()) {
+            // Sanitize to relative pathnames before storing or dispatching
+            $errfile = $this->sanitizePath($errfile);
+
+            if ($this->activated) {
+                $this->errors[] = compact('errno', 'errstr', 'errfile', 'errline');
+            }
+
+            // Dispatch to registered loggers with appropriate PSR-3 level
+            $levelMap = [
+                E_USER_ERROR      => 'error',
+                E_USER_WARNING    => 'warning',
+                E_USER_NOTICE     => 'notice',
+                E_USER_DEPRECATED => 'notice',
+                E_WARNING         => 'warning',
+                E_NOTICE          => 'notice',
+                E_DEPRECATED      => 'notice',
+            ];
+            $psrLevel = $levelMap[$errno] ?? 'error';
+            $this->log($psrLevel, $errstr, [
+                'channel'   => 'messages',
+                'errno'     => $errno,
+                'errfile'   => $errfile,
+                'errline'   => $errline,
+                // Passed through so a logger can record where the error came from. Only
+                // forwarded when a caller supplied one -- building a backtrace here for
+                // every notice would cost more than the logging is worth, so a logger that
+                // wants one and did not get one captures its own.
+                'trace'     => $trace,
+                // Set only by handleException(); lets a logger label the entry as an
+                // uncaught exception rather than an ordinary error.
+                'exception' => $exceptionClass,
+            ]);
+        }
+
+        if ($errno == E_USER_ERROR) {
+            $includeTrace = true;
+            if (substr($errstr, 0, '8') === 'notrace:') {
+                $includeTrace = false;
+                $errstr       = substr($errstr, 8);
+            }
+            // tadtools 會依據 hide_error_messages 偏好設定此全域變數。
+            // 啟用時隱藏致命錯誤訊息與回溯資訊。
+            if (!empty($GLOBALS['tadtools_hide_error_messages'])) {
+                $errorId    = bin2hex(random_bytes(8));
+                $logMessage = str_replace(["\r", "\n"], ' ', (string) $errstr);
+                $logFile    = str_replace(["\r", "\n"], ' ', (string) $errfile);
+                error_log(sprintf(
+                    '[XOOPS error ID: %s] Fatal error: %s in %s on line %s',
+                    $errorId,
+                    $logMessage,
+                    $logFile,
+                    $errline
+                ));
+                echo '<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">'
+                    . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                    . '<title>頁面發生錯誤</title></head><body><main>'
+                    . '<h1>抱歉，頁面目前無法正常運作。</h1>'
+                    . '<p>請稍後再試；若問題持續發生，請聯絡網站管理員並提供以下錯誤編號。</p>'
+                    . '<p>錯誤編號：<code>' . $errorId . '</code></p>'
+                    . '</main></body></html>';
+                exit();
+            }
+
+            // Guarded: an E_USER_ERROR can be raised before the language files are loaded,
+            // and an "Undefined constant" here would replace the real fatal with a useless
+            // one. Fall back to the constant name's plain-English intent.
+            $fatalMessage = defined('_XOOPS_FATAL_MESSAGE') ? _XOOPS_FATAL_MESSAGE : '%s';
+            echo sprintf($fatalMessage, htmlspecialchars((string) $errstr, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+            if ($includeTrace) {
+                $backtraceLabel = defined('_XOOPS_FATAL_BACKTRACE') ? _XOOPS_FATAL_BACKTRACE : 'Backtrace';
+                // Escaped like every other value echoed here. It is a language constant
+                // today, but translations are user-editable files.
+                $backtraceLabel = htmlspecialchars((string) $backtraceLabel, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                echo "<div class='row mt-5'><div class='col-lg-2'></div><div class='col-lg-8'><div class='alert alert-warning'>" . $backtraceLabel . ':<br>';
+                if ($trace === null && function_exists('debug_backtrace')) {
+                    $trace = \debug_backtrace();
+                    array_shift($trace); // Remove the first element, which is this function itself
+                }
+                foreach ($trace as $step) {
+                    if (isset($step['file'])) {
+                        echo htmlspecialchars($this->sanitizePath($step['file']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                        // The line number is escaped too. Engine-generated traces give an
+                        // int, but handleError() is public and $trace is untyped, so a
+                        // caller can supply any string here.
+                        echo ' (' . htmlspecialchars((string) ($step['line'] ?? '?'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ")\n<br>";
+                    }
+                }
+                echo "</div></div><div class='col-lg-2'></div></div>";
+            }
+            exit();
+        }
+    }
+
+    /**
+     * 【tadtools 客製】將致命錯誤以一行一筆 JSON 寫入 XOOPS_VAR_PATH/logs/tadtools_error.log。
+     * 後台「錯誤查詢」(modules/tadtools/admin/error_log.php) 透過 class/ErrorLog.php 讀取此檔，
+     * 兩邊的檔案路徑必須一致。升級 XOOPS 時，請連同 handleError() 內的呼叫一併保留。
+     * 寫入失敗時不可再丟出錯誤，以免干擾原本的錯誤處理流程。
+     */
+    protected function writeTadtoolsErrorLog($errorId, $errstr, $errfile, $errline, $trace = null)
+    {
+        try {
+            $dir = XOOPS_VAR_PATH . '/logs';
+            if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+                return;
+            }
+            $file = $dir . '/tadtools_error.log';
+
+            // 依 tadtools 偏好設定限制大小與舊檔份數（設定尚未載入時用預設值：2MB、3 份）。
+            // 超過大小就輪替：.N 刪除、.(N-1) 改名為 .N ... 主檔改名為 .1，因此總量有上限。
+            $maxSize  = min(50, max(1, (int) ($GLOBALS['tadtools_error_log_max_size'] ?? 2))) * 1048576;
+            $maxFiles = min(20, max(1, (int) ($GLOBALS['tadtools_error_log_max_files'] ?? 3)));
+            clearstatcache(true, $file);
+            if (is_file($file) && filesize($file) > $maxSize) {
+                // 順便清掉因縮小保留份數而多出來的舊檔
+                foreach ((array) glob($file . '.*') as $old) {
+                    $n = substr($old, strlen($file) + 1);
+                    if (ctype_digit($n) && (int) $n >= $maxFiles) {
+                        @unlink($old);
+                    }
+                }
+                for ($i = $maxFiles - 1; $i >= 1; $i--) {
+                    if (is_file($file . '.' . $i)) {
+                        @rename($file . '.' . $i, $file . '.' . ($i + 1));
+                    }
+                }
+                @rename($file, $file . '.1');
+            }
+
+            if ($trace === null && function_exists('debug_backtrace')) {
+                $trace = \debug_backtrace();
+                array_shift($trace);
+            }
+            $steps = [];
+            foreach ((array) $trace as $step) {
+                if (isset($step['file'])) {
+                    $steps[] = $step['file'] . ':' . ($step['line'] ?? '');
+                    if (count($steps) >= 10) {
+                        break;
+                    }
+                }
+            }
+
+            // 網址只記錄路徑，不含查詢字串，避免把 token 等敏感參數寫進紀錄
+            $uri    = isset($_SERVER['REQUEST_URI']) ? (string) strtok($_SERVER['REQUEST_URI'], '?') : '';
+            $record = [
+                'id'      => $errorId,
+                'time'    => date('Y-m-d H:i:s'),
+                'message' => $errstr,
+                'file'    => $errfile,
+                'line'    => $errline,
+                'method'  => $_SERVER['REQUEST_METHOD'] ?? '',
+                'uri'     => $uri,
+                'php'     => PHP_VERSION,
+                'trace'   => $steps,
+            ];
+            $json = json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+            if (false !== $json) {
+                @file_put_contents($file, $json . "\n", FILE_APPEND | LOCK_EX);
+            }
+        } catch (\Throwable $e) {
+            // 忽略：紀錄失敗不應影響錯誤頁輸出
+        }
+    }
+
+    /**
+     * Exception handling callback.
+     *
+     * @param \Exception|\Throwable $e uncaught Exception or Error
+     *
+     * @return void
+     */
+    public function handleException($e)
+    {
+        if ($this->isThrowable($e)) {
+            $msg = get_class($e) . ': ' . $this->sanitizePath($this->sanitizeDbMessage($e->getMessage()));
+            // The class is forwarded so a logger can tell an uncaught exception from a
+            // triggered error. Both arrive as E_USER_ERROR, and matching on the message
+            // text would be guesswork.
+            $this->handleError(E_USER_ERROR, $msg, $e->getFile(), $e->getLine(), $e->getTrace(), get_class($e));
+        }
+    }
+
+    /**
+     * Determine if an object implements Throwable
+     *
+     * @param mixed $e Expected to be an object related to Exception or Throwable
+     *
+     * @return bool true if related to Throwable or Exception, otherwise false
+     */
+    protected function isThrowable($e)
+    {
+        $type = interface_exists('\Throwable', false) ? '\Throwable' : '\Exception';
+        return $e instanceof $type;
+    }
+
+    /**
+     *
+     * @access protected
+     *
+     * @param string $path
+     *
+     * @return mixed|string
+     */
+    public function sanitizePath($path)
+    {
+        $path = str_replace(['\\', XOOPS_ROOT_PATH, str_replace('\\', '/', realpath(XOOPS_ROOT_PATH))], ['/', '', ''], $path);
+
+        return $path;
+    }
+
+    /**
+     * sanitizeDbMessage
+     * @access protected
+     *
+     * @param string $message
+     *
+     * @return string
+     */
+    protected function sanitizeDbMessage($message)
+    {
+        // Guarded: this runs from the exception handler, which must survive an error raised
+        // BEFORE mainfile.php has defined the database constants. Unguarded, the handler
+        // itself fataled on "Undefined constant XOOPS_DB_PREFIX" and masked the real error.
+        if (defined('XOOPS_DB_PREFIX')) {
+            $message = str_replace(XOOPS_DB_PREFIX . '_', '', $message);
+        }
+        if (defined('XOOPS_DB_NAME')) {
+            $message = str_replace(XOOPS_DB_NAME . '.', '', $message);
+        }
+
+        return $message;
+    }
+
+    /**
+     * Output buffering callback inserting logger dump in page output
+     * @param $output
+     * @return string
+     */
+    public function render($output)
+    {
+        global $xoopsUser;
+        if (!$this->activated) {
+            return $output;
+        }
+
+        $log                    = $this->dump($this->usePopup ? 'popup' : '');
+        $this->renderingEnabled = $this->activated = false;
+        $pattern                = '<!--{xo-logger-output}-->';
+        $pos                    = strpos($output, $pattern);
+        if ($pos !== false) {
+            return substr($output, 0, $pos) . $log . substr($output, $pos + strlen($pattern));
+        } else {
+            return $output . $log;
+        }
+    }
+
+    /**
+     * *#@+
+     *
+     * @protected
+     * @param string $mode
+     * @return
+     */
+    public function dump($mode = '')
+    {
+        include XOOPS_ROOT_PATH . '/class/logger/render.php';
+
+        return $ret;
+    }
+
+    /**
+     * get the current execution time of a timer
+     *
+     * @param  string $name  name of the counter
+     * @param  bool   $unset removes counter from global log
+     * @return float  current execution time of the counter
+     */
+    public function dumpTime($name = 'XOOPS', $unset = false)
+    {
+        if (!$this->activated) {
+            return null;
+        }
+
+        if (!isset($this->logstart[$name])) {
+            return 0;
+        }
+        $stop  = $this->logend[$name] ?? $this->microtime();
+        $start = $this->logstart[$name];
+
+        if ($unset) {
+            unset($this->logstart[$name]);
+        }
+
+        return $stop - $start;
+    }
+
+    /**
+     * XoopsLogger::triggerError()
+     *
+     * @deprecated
+     * @param  int     $errkey
+     * @param  string  $errStr
+     * @param  string  $errFile
+     * @param  string  $errLine
+     * @param  int $errNo
+     * @return void
+     */
+    public function triggerError($errkey = 0, $errStr = '', $errFile = '', $errLine = '', $errNo = 0)
+    {
+        $GLOBALS['xoopsLogger']->addDeprecated(__METHOD__ . '  is deprecated since XOOPS 2.5.4');
+
+        if (!empty($errStr)) {
+            $errStr = sprintf($errStr, $errkey);
+        }
+        $errFile = $this->sanitizePath($errFile);
+        $this->handleError($errNo, $errStr, $errFile, $errLine);
+    }
+
+    /**
+     * *#@+
+     *
+     * @deprecated
+     */
+    public function dumpAll()
+    {
+        $GLOBALS['xoopsLogger']->addDeprecated(__METHOD__ . '  is deprecated since XOOPS 2.5.4, please use \'$xoopsLogger->dump(\'\');\' instead.');
+
+        return $this->dump('');
+    }
+
+    /**
+     * dumpBlocks @deprecated
+     *
+     * @return dump
+     */
+    public function dumpBlocks()
+    {
+        $GLOBALS['xoopsLogger']->addDeprecated(__METHOD__ . '  is deprecated since XOOPS 2.5.4, please use \'$xoopsLogger->dump(\'blocks\');\' instead.');
+
+        return $this->dump('blocks');
+    }
+
+    /**
+     * dumpExtra @deprecated
+     *
+     * @return dump
+     */
+    public function dumpExtra()
+    {
+        $GLOBALS['xoopsLogger']->addDeprecated(__METHOD__ . '  is deprecated since XOOPS 2.5.4, please use \'$xoopsLogger->dump(\'extra\');\' instead.');
+
+        return $this->dump('extra');
+    }
+
+    /**
+     * dump Queries @deprecated
+     *
+     * @return mixed
+     */
+    public function dumpQueries()
+    {
+        $GLOBALS['xoopsLogger']->addDeprecated(__METHOD__ . '  is deprecated since XOOPS 2.5.4, please use \'$xoopsLogger->dump(\'queries\');\' instead.');
+
+        return $this->dump('queries');
+    }
+    /**
+     * *#@-
+     */
+}
+
+/**
+ * PHP Error handler
+ *
+ * NB: You're not supposed to call this function directly, if you don't understand why, then
+ * you'd better spend some time reading your PHP manual before you hurt somebody
+ *
+ * @internal Using a function and not calling the handler method directly because of old PHP versions
+ * set_error_handler() have problems with the array( obj,methodname ) syntax
+ * @param       $errNo
+ * @param       $errStr
+ * @param       $errFile
+ * @param       $errLine
+ * @param  null $errContext
+ * @return bool
+ */
+function XoopsErrorHandler_HandleError($errNo, $errStr, $errFile, $errLine, $errContext = null)
+{
+    /*
+    // We don't want every error to come through this will help speed things up'
+    if ($errNo == '2048') {
+    return true;
+    }
+    // XOOPS should always be STRICT compliant thus the above lines makes no sense and will be removed! -- Added by Taiwen Jiang
+     */
+    $logger = XoopsLogger::getInstance();
+    $logger->handleError($errNo, $errStr, $errFile, $errLine, $errContext);
+    return null;
+}

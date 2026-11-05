@@ -1,0 +1,134 @@
+<?php
+/**
+ * XOOPS main configuration file
+ *
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright       (c) 2000-2026 XOOPS Project (https://xoops.org)
+ * @license             GNU GPL 2 (https://www.gnu.org/licenses/gpl-2.0.html)
+ */
+
+if (!defined('XOOPS_MAINFILE_INCLUDED')) {
+    define('XOOPS_MAINFILE_INCLUDED', 1);
+
+    // XOOPS Physical Paths
+
+    // Physical path to the XOOPS documents (served) directory WITHOUT trailing slash
+    define('XOOPS_ROOT_PATH', '');
+
+    // For forward compatibility
+    // Physical path to the XOOPS library directory WITHOUT trailing slash
+    define('XOOPS_PATH', '');
+    // Physical path to the XOOPS datafiles (writable) directory WITHOUT trailing slash
+    define('XOOPS_VAR_PATH', '');
+    // Alias of XOOPS_PATH, for compatibility, temporary solution
+    define('XOOPS_TRUST_PATH', XOOPS_PATH);
+
+    // URL Association for SSL and Protocol Compatibility
+    $http = 'http://';
+    if (!empty($_SERVER['HTTPS'])) {
+        $http = ($_SERVER['HTTPS'] === 'on') ? 'https://' : 'http://';
+    }
+    define('XOOPS_PROT', $http);
+
+    // XOOPS Virtual Path (URL)
+    // Virtual path to your main XOOPS directory WITHOUT trailing slash
+    // Example: define("XOOPS_URL", "http://url_to_xoops_directory");
+    define('XOOPS_URL', 'https://');
+
+    // in mainfile.php - add this if it doesn't exist
+    if (!defined('XOOPS_COOKIE_DOMAIN_USE_PSL')) {
+        define('XOOPS_COOKIE_DOMAIN_USE_PSL', true);
+    }
+
+    // XOOPS Cookie Domain to specify when creating cookies. May be blank (i.e. for IP address host),
+    // full host from XOOPS_URL (i.e. www.example.com) or just the registered domain (i.e. example.com)
+    // to share cookies across multiple subdomains (i.e. www.example.com and blog.example.com)
+    define('XOOPS_COOKIE_DOMAIN', '');
+
+    // Shall be handled later, don't forget!
+    define('XOOPS_CHECK_PATH', 0);
+    // Protect against external scripts execution if safe mode is not enabled
+    if (XOOPS_CHECK_PATH) {
+        if (function_exists('debug_backtrace')) {
+            $xoopsScriptPath = debug_backtrace();
+            if (!count($xoopsScriptPath)) {
+                die('XOOPS path check: this file cannot be requested directly');
+            }
+            $xoopsScriptPath = $xoopsScriptPath[0]['file'];
+        } else {
+            $xoopsScriptPath = $_SERVER['PATH_TRANSLATED'] ?? $_SERVER['SCRIPT_FILENAME'];
+        }
+        if (DIRECTORY_SEPARATOR !== '/') {
+            // IIS6 may double the \ chars
+            $xoopsScriptPath = str_replace(strpos($xoopsScriptPath, "\\\\", 2) ? "\\\\" : DIRECTORY_SEPARATOR, '/', $xoopsScriptPath);
+        }
+        if (strcasecmp(substr($xoopsScriptPath, 0, strlen(XOOPS_ROOT_PATH)), str_replace(DIRECTORY_SEPARATOR, '/', XOOPS_ROOT_PATH))) {
+            exit('XOOPS path check: Script is not inside XOOPS_ROOT_PATH and cannot run.');
+        }
+    }
+
+    // Debug settings are read from xoops_data/data/debug.php when that file exists.
+    // Copy debug.dist.php beside it to switch debugging on, instead of editing this
+    // file -- mainfile.php also holds your database credentials and is never replaced
+    // on upgrade, which is what made the old approach awkward.
+    //
+    // No debug.php present means production behaviour, exactly as before.
+    // Guarded: include_once only WARNS on a missing file, and calling the function would
+    // then be a fatal "Call to undefined function" -- taking the whole site down before
+    // secure.php is even read. mainfile.php survives upgrades while include/ is replaced,
+    // so a partial or interrupted upgrade can genuinely produce this pairing.
+    $xoopsDebugConfig  = [];
+    $xoopsDebugLoader  = XOOPS_ROOT_PATH . '/include/debugconfig.php';
+
+    if (is_readable($xoopsDebugLoader)) {
+        // try/catch, not just is_readable(). The realistic failure here is not a MISSING
+        // file -- is_readable() covers that -- but a TRUNCATED one, left by an upload or
+        // a write that died halfway. That is a ParseError, and a ParseError raised by an
+        // include IS catchable, unlike one in this file. Fail closed to production.
+        try {
+            require_once $xoopsDebugLoader;
+        } catch (\Throwable $e) {
+            // Deliberately silent. Nothing has configured error display yet, so anything
+            // said here is said under php.ini's rules -- which on a misconfigured host
+            // means a path printed to whoever loaded the page.
+            //
+            // Nothing is recorded either: xoops_setDebugConfigError() lives in the file
+            // that just failed to parse. It records a broken debug.php, not a broken
+            // debugconfig.php, and an earlier comment here claimed otherwise.
+        }
+    }
+    unset($xoopsDebugLoader);
+
+    // BOTH functions, not just the first. They live in one file, so a half-written copy
+    // of it is exactly the state that defines one and not the other -- and calling the
+    // missing one is a fatal before secure.php is even read.
+    if (function_exists('xoops_getDebugConfig') && function_exists('xoops_applyDebugConfig')) {
+        $xoopsDebugConfig = xoops_getDebugConfig();
+
+        // Unconditionally: it publishes XOOPS_ENVIRONMENT and XOOPS_ENV before it looks
+        // at the config at all, and those are documented as existing on every request.
+        // With no debug.php it defines them and returns.
+        xoops_applyDebugConfig();
+    }
+
+    define('XOOPS_DB_LEGACY_LOG', !empty($xoopsDebugConfig['database']['legacy_log']));
+    define('XOOPS_DEBUG', [] !== $xoopsDebugConfig); // Also shows E_USER_DEPRECATED notices
+    unset($xoopsDebugConfig);
+
+    // Secure file
+    require XOOPS_VAR_PATH . '/data/secure.php';
+
+    define('XOOPS_GROUP_ADMIN', '1');
+    define('XOOPS_GROUP_USERS', '2');
+    define('XOOPS_GROUP_ANONYMOUS', '3');
+
+    if (!isset($xoopsOption['nocommon']) && XOOPS_ROOT_PATH != '') {
+        include XOOPS_ROOT_PATH . '/include/common.php';
+    }
+}

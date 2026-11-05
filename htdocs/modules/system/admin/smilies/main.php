@@ -1,0 +1,271 @@
+<?php
+/*
+ * You may not change or alter any portion of this comment or credits
+ * of supporting developers from this source code or any supporting source code
+ * which is considered copyrighted (c) material of the original comment or credit authors.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
+/**
+ * @copyright    2000-2026 XOOPS Project (https://xoops.org)
+ * @license      GNU GPL 2.0 or later (https://www.gnu.org/licenses/gpl-2.0.html)
+ * @package
+ * @since
+ * @author       XOOPS Development Team, Kazumi Ono (AKA onokazu)
+ */
+use Xmf\Request;
+
+// Check users rights
+if (!is_object($xoopsUser) || !is_object($xoopsModule) || !$xoopsUser->isAdmin($xoopsModule->mid())) {
+    exit(_NOPERM);
+}
+//  Check is active
+if (!xoops_getModuleOption('active_smilies', 'system')) {
+    redirect_header('admin.php', 2, _AM_SYSTEM_NOTACTIVE);
+}
+
+// Parameters
+$nb_smilies  = xoops_getModuleOption('smilies_pager', 'system');
+$mimetypes   = ['image/gif', 'image/jpeg', 'image/pjpeg', 'image/x-png', 'image/png'];
+$upload_size = 500000;
+// Get Action type
+$op = Request::hasVar('op', 'POST') ? Request::getString('op', 'list', 'POST') : Request::getString('op', 'list', 'GET');
+
+// The status toggle arrives via AJAX (system_setStatus); validate the request
+// token before any output so a forged request cannot flip the display flag.
+if ('smilies_update_display' === $op && !$GLOBALS['xoopsSecurity']->check(false)) {
+    http_response_code(403);
+    exit();
+}
+// Get smilies handler
+/** @var  SystemsmiliesHandler $smilies_Handler */
+$smilies_Handler = xoops_getModuleHandler('smilies', 'system');
+
+// Define main template
+$GLOBALS['xoopsOption']['template_main'] = 'system_smilies.tpl';
+// Call Header
+xoops_cp_header();
+
+// Define Breadcrumb and tips
+$xoBreadCrumb->addLink(_AM_SYSTEM_CONFIG, XOOPS_URL . '/modules/system/admin.php');
+if ('list' === $op) {
+    $xoBreadCrumb->addLink(_AM_SYSTEM_SMILIES_NAV_MANAGER);
+} else {
+    $xoBreadCrumb->addLink(_AM_SYSTEM_SMILIES_NAV_MANAGER, system_adminVersion('smilies', 'adminpath'));
+}
+
+
+switch ($op) {
+
+    case 'list':
+    default:
+        // Define Stylesheet
+        $xoTheme->addStylesheet(XOOPS_URL . '/modules/system/css/admin.css');
+        $xoTheme->addScript('browse.php?Frameworks/jquery/jquery.js');
+        $xoTheme->addScript('browse.php?Frameworks/jquery/plugins/jquery.tablesorter.js');
+        $xoTheme->addScript('modules/system/js/admin.js');
+        // Define Breadcrumb and tips
+        $xoBreadCrumb->addTips(_AM_SYSTEM_SMILIES_NAV_TIPS);
+        $xoBreadCrumb->addHelp(system_adminVersion('smilies', 'help'));
+        $xoBreadCrumb->render();
+        // Get start pager
+        $start = Request::getInt('start', 0, 'GET');
+        // Criteria
+        $criteria = new CriteriaCompo();
+        $criteria->setSort('id');
+        $criteria->setOrder('ASC');
+        $criteria->setStart($start);
+        $criteria->setLimit($nb_smilies);
+        // Count smilies
+        $smilies_count = $smilies_Handler->getCount($criteria);
+        $smilies_arr   = $smilies_Handler->getAll($criteria);
+        // Assign Template variables
+        $xoopsTpl->assign('smilies_count', $smilies_count);
+        if ($smilies_count > 0) {
+            foreach (array_keys($smilies_arr) as $i) {
+                $smilies_id             = $smilies_arr[$i]->getVar('id');
+                $smilies['smilies_id']  = $smilies_id;
+                $smilies['code']        = $smilies_arr[$i]->getVar('code');
+                $smilies['emotion']     = $smilies_arr[$i]->getVar('emotion');
+                $smilies['display']     = $smilies_arr[$i]->getVar('display');
+                $smilies_img            = $smilies_arr[$i]->getVar('smile_url') ?: 'blank.gif';
+                $smilies['image']       = '<img src="' . XOOPS_UPLOAD_URL . '/' . $smilies_img . '" alt="" />';
+                $smilies['edit_delete'] = '<a href="admin.php?fct=smilies&amp;op=edit_smilie&amp;smilies_id=' . $smilies_id . '">
+                                           <img src="./images/icons/edit.png" border="0" alt="' . _AM_SYSTEM_SMILIES_EDIT . '" title="' . _AM_SYSTEM_SMILIES_EDIT . '"></a>
+                                           <a href="admin.php?fct=smilies&amp;op=smilies_delete&amp;smilies_id=' . $smilies_id . '">
+                                           <img src="./images/icons/delete.png" border="0" alt="' . _AM_SYSTEM_SMILIES_DELETE . '" title="' . _AM_SYSTEM_SMILIES_DELETE . '"></a>';
+                $xoopsTpl->appendByRef('smilies', $smilies);
+                unset($smilies);
+            }
+        }
+        // Display Page Navigation
+        if ($smilies_count > $nb_smilies) {
+            $nav = new XoopsPageNav($smilies_count, $nb_smilies, $start, 'start', 'fct=smilies&amp;op=list');
+            $xoopsTpl->assign('nav_menu', $nav->renderNav(4));
+        }
+        break;
+
+        // New smilie
+    case 'new_smilie':
+        // Define Stylesheet
+        $xoTheme->addStylesheet(XOOPS_URL . '/modules/system/css/admin.css');
+        // Define Breadcrumb and tips
+        $xoBreadCrumb->addLink(_AM_SYSTEM_SMILIES_NAV_ADD);
+        $xoBreadCrumb->addHelp(system_adminVersion('smilies', 'help') . '#new');
+        $xoBreadCrumb->addTips(sprintf(_AM_SYSTEM_SMILIES_NAV_TIPS_FORM1, implode(', ', $mimetypes)) . sprintf(_AM_SYSTEM_SMILIES_NAV_TIPS_FORM2, $upload_size / 1000));
+        $xoBreadCrumb->render();
+        // Create form
+        $obj  = $smilies_Handler->create();
+        $form = $obj->getForm();
+        // Assign form
+        $xoopsTpl->assign('form', $form->render());
+        break;
+
+        // Edit smilie
+    case 'edit_smilie':
+        // Define Stylesheet
+        $xoTheme->addStylesheet(XOOPS_URL . '/modules/system/css/admin.css');
+        // Define Breadcrumb and tips
+        $xoBreadCrumb->addLink(_AM_SYSTEM_SMILIES_NAV_EDIT);
+        $xoBreadCrumb->addHelp(system_adminVersion('smilies', 'help') . '#edit');
+        $xoBreadCrumb->addTips(sprintf(_AM_SYSTEM_SMILIES_NAV_TIPS_FORM1, implode(', ', $mimetypes)) . sprintf(_AM_SYSTEM_SMILIES_NAV_TIPS_FORM2, $upload_size / 1000));
+        $xoBreadCrumb->render();
+        // Create form
+        $obj  = $smilies_Handler->get(Request::getInt('smilies_id', 0, 'GET'));
+        if (!is_object($obj)) {
+            redirect_header('admin.php?fct=smilies', 2, _AM_SYSTEM_DBERROR);
+        }
+        $form = $obj->getForm();
+        // Assign form
+        $xoopsTpl->assign('form', $form->render());
+        break;
+
+        // Save smilie
+    case 'save_smilie':
+        if (!$GLOBALS['xoopsSecurity']->check()) {
+            redirect_header('admin.php?fct=smilies', 3, implode('<br>', $GLOBALS['xoopsSecurity']->getErrors()));
+        }
+        // Define Breadcrumb and tips
+        $xoBreadCrumb->addLink(_AM_SYSTEM_SMILIES_NAV_ADD);
+        $xoBreadCrumb->addTips(sprintf(_AM_SYSTEM_SMILIES_NAV_TIPS_FORM1, implode(', ', $mimetypes)) . sprintf(_AM_SYSTEM_SMILIES_NAV_TIPS_FORM2, $upload_size / 1000));
+        $xoBreadCrumb->render();
+
+        if (Request::hasVar('smilies_id', 'POST')) {
+            $obj = $smilies_Handler->get(Request::getInt('smilies_id', 0, 'POST'));
+            if (!is_object($obj)) {
+                redirect_header('admin.php?fct=smilies', 2, _AM_SYSTEM_DBERROR);
+            }
+        } else {
+            $obj = $smilies_Handler->create();
+        }
+        // error
+        $err = [];
+        $obj->setVar('code', Request::getString('code', '', 'POST'));
+
+        $obj->setVar('emotion', Request::getString('emotion', '', 'POST'));
+        $obj->setVar('display', Request::getInt('display', 0, 'POST'));
+        if (Request::getString('code', '', 'POST') == '' || Request::getString('emotion', '', 'POST') == '') {
+            $err[] = 'the code or description are empty';
+        }
+
+        include_once XOOPS_ROOT_PATH . '/class/uploader.php';
+        $uploader_smilies_img = new XoopsMediaUploader(XOOPS_UPLOAD_PATH . '/smilies', $mimetypes, $upload_size, null, null);
+        if ($_FILES['smile_url']['error'] != UPLOAD_ERR_NO_FILE) {
+            if ($uploader_smilies_img->fetchMedia('smile_url')) {
+                $uploader_smilies_img->setPrefix('smil');
+                $uploader_smilies_img->fetchMedia('smile_url');
+                if (!$uploader_smilies_img->upload()) {
+                    $err[] = $uploader_smilies_img->getErrors();
+                } else {
+                    $obj->setVar('smile_url', 'smilies/' . $uploader_smilies_img->getSavedFileName());
+                    if (!$smilies_Handler->insert($obj)) {
+                        $err[] = sprintf(_FAILSAVEIMG, $obj->getVar('code'));
+                    }
+                }
+            } else {
+                $err[] = $uploader_smilies_img->getErrors();
+            }
+        } else {
+            $obj->setVar('smile_url', 'smilies/' . basename(Request::getString('smile_url', '', 'POST')));
+            if (!$smilies_Handler->insert($obj)) {
+                $err[] = sprintf(_FAILSAVEIMG, $obj->getVar('code'));
+            }
+        }
+        if (count($err) > 0) {
+            // Define Stylesheet
+            $xoTheme->addStylesheet(XOOPS_URL . '/modules/system/css/admin.css');
+            // Display errors
+            xoops_error($err);
+            // Call Footer
+            xoops_cp_footer();
+            exit();
+        }
+        redirect_header('admin.php?fct=smilies', 2, _AM_SYSTEM_SMILIES_SAVE);
+        break;
+
+        //Del a smilie
+    case 'smilies_delete':
+        $smilies_id = Request::hasVar('smilies_id', 'POST') ? Request::getInt('smilies_id', 0, 'POST') : Request::getInt('smilies_id', 0, 'GET');
+        $obj        = $smilies_Handler->get($smilies_id);
+        if (!is_object($obj)) {
+            redirect_header('admin.php?fct=smilies', 2, _AM_SYSTEM_DBERROR);
+        }
+        if (Request::getInt('ok', 0, 'POST') == 1) {
+            if (!$GLOBALS['xoopsSecurity']->check()) {
+                redirect_header('admin.php?fct=smilies', 3, implode(',', $GLOBALS['xoopsSecurity']->getErrors()));
+            }
+            if ($smilies_Handler->delete($obj)) {
+                // Remove the image only when the stored name resolves to a file
+                // inside the upload directory; a smile_url containing ../ must
+                // not drive a delete outside it.
+                require_once XOOPS_ROOT_PATH . '/include/file_safety.php';
+                $smileFile = xoops_resolveFileWithin(XOOPS_UPLOAD_PATH, (string) $obj->getVar('smile_url', 'n'));
+                if ('' !== $smileFile) {
+                    xoops_remove_file_quietly($smileFile, 'smiley image');
+                }
+                redirect_header('admin.php?fct=smilies', 2, _AM_SYSTEM_SMILIES_SAVE);
+            } else {
+                xoops_error($obj->getHtmlErrors());
+            }
+        } else {
+            // Define Stylesheet
+            $xoTheme->addStylesheet(XOOPS_URL . '/modules/system/css/admin.css');
+            // Define Breadcrumb and tips
+            $xoBreadCrumb->addLink(_AM_SYSTEM_SMILIES_NAV_DELETE);
+            $xoBreadCrumb->addHelp(system_adminVersion('smilies', 'help') . '#delete');
+            $xoBreadCrumb->render();
+            $smilies_img = $obj->getVar('smile_url') ?: 'blank.gif';
+            xoops_confirm(
+                [
+                    'ok' => 1,
+                    'smilies_id' => $smilies_id,
+                    'op' => 'smilies_delete',
+                ],
+                $_SERVER['REQUEST_URI'],
+                sprintf(_AM_SYSTEM_SMILIES_SUREDEL) . '<br \><img src="' . XOOPS_UPLOAD_URL . '/' . $smilies_img . '" alt="" /><br \>',
+            );
+        }
+        break;
+
+    case 'smilies_update_display':
+        // Get smilies id — sent via $.post() from system_setStatus() in admin.js
+        $smilies_id = Request::getInt('smilies_id', 0, 'POST');
+        if ($smilies_id > 0) {
+            $obj = $smilies_Handler->get($smilies_id);
+            if (!is_object($obj)) {
+                redirect_header('admin.php?fct=smilies', 2, _AM_SYSTEM_DBERROR);
+            }
+            $old = $obj->getVar('display');
+            $obj->setVar('display', !$old);
+            if ($smilies_Handler->insert($obj)) {
+                exit;
+            }
+            echo $obj->getHtmlErrors();
+        }
+        break;
+}
+// Call Footer
+xoops_cp_footer();
