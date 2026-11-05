@@ -508,12 +508,12 @@ class Upgrade_270 extends XoopsUpgrade
             $path = $basePath . $item;
             if (is_dir($path)) {
                 if (!self::deleteFolder($path)) {
-                    $this->logs[] = sprintf('Failed to delete directory: %s', $this->relativePath($path));
+                    $this->logs[] = sprintf('無法刪除目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
                     $success = false;
                 }
             } elseif (is_file($path)) {
                 if (!unlink($path)) {
-                    $this->logs[] = sprintf('Failed to delete file: %s', $this->relativePath($path));
+                    $this->logs[] = sprintf('無法刪除檔案:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
                     $success = false;
                 }
             }
@@ -525,12 +525,12 @@ class Upgrade_270 extends XoopsUpgrade
             $path = $vendorPath . $item;
             if (is_dir($path)) {
                 if (!self::deleteFolder($path)) {
-                    $this->logs[] = sprintf('Failed to delete vendor directory: %s', $this->relativePath($path));
+                    $this->logs[] = sprintf('無法刪除 vendor 目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
                     $success = false;
                 }
             } elseif (is_file($path)) {
                 if (!unlink($path)) {
-                    $this->logs[] = sprintf('Failed to delete vendor file: %s', $this->relativePath($path));
+                    $this->logs[] = sprintf('無法刪除 vendor 檔案:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
                     $success = false;
                 }
             }
@@ -541,7 +541,7 @@ class Upgrade_270 extends XoopsUpgrade
         if ($success) {
             foreach ([$vendorPath, $basePath] as $emptyDir) {
                 if (!$this->removeLeftover($emptyDir)) {
-                    $this->logs[] = sprintf('Could not remove directory (it may still contain files): %s', $this->relativePath($emptyDir));
+                    $this->logs[] = sprintf('無法移除目錄(可能仍有檔案):%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($emptyDir));
                 }
             }
         }
@@ -575,7 +575,7 @@ class Upgrade_270 extends XoopsUpgrade
     {
         $path = XOOPS_ROOT_PATH . '/class/xoopseditor/tinymce5/tinymce5/';
         if (!self::deleteFolder($path)) {
-            $this->logs[] = sprintf('Failed to delete nested tinymce5 directory: %s', $this->relativePath($path));
+            $this->logs[] = sprintf('無法刪除重複的 tinymce5 目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
             return false;
         }
         return true;
@@ -607,7 +607,7 @@ class Upgrade_270 extends XoopsUpgrade
     {
         $path = XOOPS_ROOT_PATH . '/class/textsanitizer/flash/';
         if (!self::deleteFolder($path)) {
-            $this->logs[] = sprintf('Failed to delete Flash sanitizer directory: %s', $this->relativePath($path));
+            $this->logs[] = sprintf('無法刪除 Flash 文字過濾目錄:%s(此為已無用的舊檔案,請自行手動刪除)', $this->relativePath($path));
             return false;
         }
         return true;
