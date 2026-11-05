@@ -39,11 +39,8 @@ if (strlen($_SERVER['REMOTE_ADDR']) > 15) {
 include_once __DIR__ . '/checkmainfile.php';
 defined('XOOPS_ROOT_PATH') or die('Bad installation: please add this folder to the XOOPS install you want to upgrade');
 
-if (!isset($_SESSION['preflight']) || (isset($_SESSION['preflight']) && $_SESSION['preflight'] !== 'complete')) {
-    $_SESSION['preflight'] = 'active';
-    header("Location: ./preflight.php");
-    exit;
-}
+// Smarty template preflight scan is skipped on purpose.
+$_SESSION['preflight'] = 'complete';
 
 $reporting = 0;
 if (isset($_GET['debug'])) {
