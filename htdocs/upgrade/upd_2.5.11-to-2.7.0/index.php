@@ -567,7 +567,7 @@ class Upgrade_270 extends XoopsUpgrade
             }
         } else {
             $_SESSION[$this->librariesCleanupWarnedKey] = true; // warned once; queue may complete
-            $this->logs[] = '<span class="text-warning">警告：部分已無用的舊檔案無法自動刪除，不影響升級繼續進行。升級完成後，請自行手動刪除 htdocs/class/libraries/ 目錄。</span>';
+            $this->logs[]                               = '<span class="text-warning">警告：部分已無用的舊檔案無法自動刪除，不影響升級繼續進行。升級完成後，請自行手動刪除上述目錄檔案。</span>';
         }
 
         return true;

@@ -232,6 +232,11 @@ class Upgrade_240 extends XoopsUpgrade
             while (false !== ($row = $this->db->fetchArray($result))) {
                 $existing_keys[] = $row['Key_name'];
             }
+            // 2.7.3 replaced the com_status key with idx_status_created(com_status, com_created),
+            // which covers it; do not re-add the redundant key.
+            if (in_array('idx_status_created', $existing_keys, true)) {
+                $existing_keys[] = 'com_status';
+            }
             foreach ($keys as $key) {
                 if (!in_array($key, $existing_keys)) {
                     return false;
@@ -265,6 +270,9 @@ class Upgrade_240 extends XoopsUpgrade
             $existing_keys = [];
             while (false !== ($row = $this->db->fetchArray($result))) {
                 $existing_keys[] = $row['Key_name'];
+            }
+            if (in_array('idx_status_created', $existing_keys, true)) {
+                $existing_keys[] = 'com_status';
             }
             foreach ($keys as $key) {
                 if (!in_array($key, $existing_keys)) {
