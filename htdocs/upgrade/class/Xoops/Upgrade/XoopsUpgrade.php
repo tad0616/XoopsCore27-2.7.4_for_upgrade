@@ -177,6 +177,17 @@ abstract class XoopsUpgrade
         return empty($this->logs) ? '' : implode('<br>', $this->logs);
     }
 
+    protected function licenseFileForWrite(): ?string
+    {
+        $directory = XOOPS_VAR_PATH . '/data';
+        if (!is_dir($directory) || !is_writable($directory)) {
+            $this->logError(_UPGRADE_LICENSE_DIR_NOT_WRITABLE, $this->escapeForLog($this->relativePath($directory)));
+            return null;
+        }
+
+        return $directory . '/license.php';
+    }
+
     /**
      * Append a plain message to the log.
      *

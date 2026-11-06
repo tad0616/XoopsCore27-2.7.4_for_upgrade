@@ -47,11 +47,8 @@ class Upgrade_241 extends XoopsUpgrade
     public function apply_license(): bool|string
     {
         set_time_limit(120);
-        $licenseFile = XOOPS_ROOT_PATH . '/include/license.php';
-        $licenseDir  = dirname($licenseFile);
-        if (!is_writable($licenseFile) || !is_writable($licenseDir)) {
-            echo "<p><span style='color:#ff0000;'>&nbsp;include/license.php and its parent directory must be writable by the web server.</span></p>";
-
+        $licenseFile = $this->licenseFileForWrite();
+        if (null === $licenseFile) {
             return false;
         }
         if (XOOPS_LICENSE_KEY == '000000-000000-000000-000000-000000') {
@@ -60,7 +57,7 @@ class Upgrade_241 extends XoopsUpgrade
             $result = $this->xoops_upgradeLicenseKey($this->xoops_getPublicLicenceKey(), $licenseFile, __DIR__ . '/license.dist.php');
         }
         if (false === $result) {
-            $this->logs[] = 'License key write failed';
+            $this->logError(_UPGRADE_LICENSE_WRITE_FAILED, $this->escapeForLog($this->relativePath($licenseFile)));
             return false;
         }
         return (bool) $result;

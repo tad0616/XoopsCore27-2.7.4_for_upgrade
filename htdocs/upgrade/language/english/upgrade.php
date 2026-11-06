@@ -6,6 +6,8 @@
 define('_XOOPS_UPGRADE', 'XOOPS System Upgrade');
 define('_CHECKING_APPLIED', 'Checking applied upgrades:');
 define('_SET_FILES_WRITABLE', 'Make the following files writable before proceeding:');
+define('_UPGRADE_LICENSE_DIR_NOT_WRITABLE', 'The license directory "%s" is missing or not writable by the web server. Correct its permissions and retry.');
+define('_UPGRADE_LICENSE_WRITE_FAILED', 'Could not write the license file "%s". Check the directory and file permissions and retry.');
 define('_NO_NEED_UPGRADE', 'No upgrade necessary. Please %s and remove this folder from your server');
 define('_NEED_UPGRADE', 'Upgrade needed');
 define('_PROCEED_UPGRADE', 'Proceed to upgrade');

@@ -9,6 +9,8 @@ define('_XOOPS_UPGRADE', 'XOOPS 系統升級');
 define('_CHECKING_APPLIED', '檢查已套用的升級：');
 // TODO-TRANSLATE 原文: 'Make the following files writable before proceeding:'
 define('_SET_FILES_WRITABLE', '繼續之前，請將下列檔案設為可寫入：');
+define('_UPGRADE_LICENSE_DIR_NOT_WRITABLE', '授權檔目錄「%s」不存在，或網頁伺服器沒有寫入權限。請修正目錄權限後重試。');
+define('_UPGRADE_LICENSE_WRITE_FAILED', '無法寫入授權檔「%s」。請檢查目錄及檔案權限後重試。');
 // TODO-TRANSLATE 原文: 'No upgrade necessary. Please %s and remove this folder from your server'
 define('_NO_NEED_UPGRADE', '不需要升級。請%s，並從伺服器移除此資料夾');
 // TODO-TRANSLATE 原文: 'Upgrade needed'
