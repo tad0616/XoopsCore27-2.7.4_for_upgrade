@@ -538,7 +538,13 @@ class Upgrade_2511 extends XoopsUpgrade
 
         clearstatcache();
 
-        return $this->dirWalker($stopIfFound);
+        if ($this->dirWalker($stopIfFound)) {
+            unset($_SESSION['rmindexhtml-warned-2511']);
+            return true;
+        }
+
+        // Leftovers remain: pass once apply_ has warned this session, so the queue can finish.
+        return !empty($_SESSION['rmindexhtml-warned-2511']);
     }
 
     /**
@@ -579,23 +585,25 @@ class Upgrade_2511 extends XoopsUpgrade
         }
 
         if ([] === $failed) {
+            unset($_SESSION['rmindexhtml-warned-2511']);
             return true;
         }
-        // Returning true here would re-queue this patch on every click with no
-        // message, because check_rmindexhtml() keeps finding the same files.
+        // Deleting these is housekeeping only (the leftover index.html are blank
+        // placeholders), so warn but let the upgrade continue. The session flag
+        // lets check_rmindexhtml() pass, otherwise the patch would re-queue forever.
+        $_SESSION['rmindexhtml-warned-2511'] = true;
         $this->logEscaped(sprintf(
-            'Could not delete %d obsolete index.html file(s). Delete them manually, '
-            . 'or make their directories writable by the web server, then click Continue:',
+            '警告：有 %d 個已無用的舊 index.html 無法自動刪除，不影響升級繼續進行。升級完成後，請自行手動刪除下列檔案(或將其目錄設為網頁伺服器可寫入)：',
             count($failed)
         ));
         foreach (array_slice($failed, 0, 20) as $name) {
             $this->logEscaped('  ' . $this->relativePath($name));
         }
         if (count($failed) > 20) {
-            $this->logEscaped(sprintf('  ... and %d more', count($failed) - 20));
+            $this->logEscaped(sprintf('  ... 另有 %d 個', count($failed) - 20));
         }
 
-        return false;
+        return true;
     }
 
     /**

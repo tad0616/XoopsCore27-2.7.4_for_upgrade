@@ -100,18 +100,19 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function check_deletepurifier(): bool
     {
-        return !is_dir(XOOPS_TRUST_PATH . '/modules/protector/library/');
+        return !is_dir(XOOPS_TRUST_PATH . '/modules/protector/library/') || !empty($_SESSION['deletepurifier-warned-270']);
     }
 
     /**
      * Delete obsolete HTMLPurifier folder from Protector module.
      *
-     * @return bool true on success
+     * Best-effort: a failed deletion only warns the admin to delete it by hand.
+     *
+     * @return bool always true
      */
     public function apply_deletepurifier(): bool
     {
-        $folderToDelete = XOOPS_TRUST_PATH . '/modules/protector/library/';
-        return self::deleteFolder($folderToDelete);
+        return $this->deleteOrWarn(XOOPS_TRUST_PATH . '/modules/protector/library/', 'deletepurifier-warned-270');
     }
 
     // =========================================================================
@@ -125,18 +126,33 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function check_deletephpmailer(): bool
     {
-        return !is_dir(XOOPS_ROOT_PATH . '/class/mail/phpmailer/');
+        return !is_dir(XOOPS_ROOT_PATH . '/class/mail/phpmailer/') || !empty($_SESSION['deletephpmailer-warned-270']);
     }
 
     /**
      * Delete obsolete phpmailer folder.
      *
-     * @return bool true on success
+     * Best-effort: a failed deletion only warns the admin to delete it by hand.
+     *
+     * @return bool always true
      */
     public function apply_deletephpmailer(): bool
     {
-        $folderToDelete = XOOPS_ROOT_PATH . '/class/mail/phpmailer/';
-        return self::deleteFolder($folderToDelete);
+        return $this->deleteOrWarn(XOOPS_ROOT_PATH . '/class/mail/phpmailer/', 'deletephpmailer-warned-270');
+    }
+
+    /**
+     * Delete an obsolete folder; on failure warn (in Chinese) instead of failing the patch.
+     */
+    private function deleteOrWarn(string $folder, string $flagKey): bool
+    {
+        if (self::deleteFolder($folder)) {
+            unset($_SESSION[$flagKey]);
+            return true;
+        }
+        $_SESSION[$flagKey] = true;
+        $this->logs[]       = sprintf('<span class="text-warning">警告：無法刪除目錄：%s(此為已無用的舊檔案，不影響升級繼續進行，升級完成後請自行手動刪除)</span>', $this->relativePath($folder));
+        return true;
     }
 
     // =========================================================================
