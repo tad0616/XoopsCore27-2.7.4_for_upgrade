@@ -82,11 +82,12 @@ class Upgrade_270 extends XoopsUpgrade
             'normalizeprofileregstepsort',
         ];
         $this->usedFiles    = [];
+        // Only best-effort deletions use these paths now (they warn, never block),
+        // so they are no longer required to be writable up front.
         $this->pathsToCheck = [
             XOOPS_ROOT_PATH . '/class/mail/phpmailer',
             XOOPS_TRUST_PATH . '/modules/protector/library',
         ];
-        $this->usedFiles = array_merge($this->usedFiles, $this->pathsToCheck);
     }
 
     // =========================================================================

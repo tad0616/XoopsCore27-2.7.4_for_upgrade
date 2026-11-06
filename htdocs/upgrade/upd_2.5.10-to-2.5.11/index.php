@@ -77,7 +77,16 @@ class Upgrade_2511 extends XoopsUpgrade
             XOOPS_VAR_PATH,
             XOOPS_PATH,
         ];
-        $this->usedFiles = array_merge($this->usedFiles, $this->pathsToCheck);
+        // The index.html cleanup only warns when a file cannot be deleted, so the
+        // scanned code/theme directories no longer need to be writable up front.
+        // Only the directories that other tasks of this patch write to are required.
+        $this->usedFiles = [
+            XOOPS_ROOT_PATH . '/cache',
+            XOOPS_ROOT_PATH . '/templates_c',
+            XOOPS_ROOT_PATH . '/uploads',
+            XOOPS_VAR_PATH,
+            XOOPS_PATH,
+        ];
     }
 
     /**
