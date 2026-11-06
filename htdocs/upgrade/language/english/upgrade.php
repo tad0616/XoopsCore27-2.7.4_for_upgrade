@@ -17,6 +17,7 @@ define('_MANUAL_INSTRUCTIONS', 'Manual installation instructions');
 
 // %s is filename
 define('_FAILED_PATCH', 'Failed to patch %s');
+define('_MANUAL_CLEANUP_PATCH', 'Upgrade %s completed; some obsolete files need to be deleted by hand afterwards');
 define('_APPLY_NEXT', 'Apply next upgrade (%s)');
 define('_COPY_RED_LINES', 'Copy the following red lines to %s');
 

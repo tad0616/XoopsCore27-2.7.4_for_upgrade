@@ -59,6 +59,9 @@ abstract class XoopsUpgrade
     /** @var string[] $logs accumulated log messages */
     public array $logs = [];
 
+    /** @var bool true when the patch succeeded but left obsolete files for the admin to delete by hand */
+    public bool $needsManualCleanup = false;
+
     /** @var string|null $languageFolder language folder name, or null when not loaded */
     public ?string $languageFolder = null;
 

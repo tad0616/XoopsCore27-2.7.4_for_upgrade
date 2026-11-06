@@ -601,6 +601,7 @@ class Upgrade_2511 extends XoopsUpgrade
         // placeholders), so warn but let the upgrade continue. The session flag
         // lets check_rmindexhtml() pass, otherwise the patch would re-queue forever.
         $_SESSION['rmindexhtml-warned-2511'] = true;
+        $this->needsManualCleanup            = true;
         $this->logEscaped(sprintf(
             '警告：有 %d 個已無用的舊 index.html 無法自動刪除，不影響升級繼續進行。升級完成後，請自行手動刪除下列檔案(或將其目錄設為網頁伺服器可寫入)：',
             count($failed)

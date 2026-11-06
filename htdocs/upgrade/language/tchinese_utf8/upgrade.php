@@ -27,6 +27,7 @@ define('_MANUAL_INSTRUCTIONS', '手動安裝說明');
 // %s is filename
 // TODO-TRANSLATE 原文: 'Failed to patch %s'
 define('_FAILED_PATCH', '修補 %s 失敗');
+define('_MANUAL_CLEANUP_PATCH', '升級 %s 已完成，需事後手動處理部分舊檔案');
 // TODO-TRANSLATE 原文: 'Apply next upgrade (%s)'
 define('_APPLY_NEXT', '套用下一個升級（%s）');
 // TODO-TRANSLATE 原文: 'Copy the following red lines to %s'

@@ -129,7 +129,8 @@ if (!xoops_upgrade_user_is_webmaster($xoopsUser)) {
             $res = $upgrader->apply();
             // Report the outcome, not the intent: the heading used to be printed
             // before apply() ran, so a patch that never took still read "Applied".
-            printf('<h2>' . ($res ? _PERFORMING_UPGRADE : _FAILED_PATCH) . '</h2>', $next);
+            $heading = !$res ? _FAILED_PATCH : ($upgrader->needsManualCleanup ? _MANUAL_CLEANUP_PATCH : _PERFORMING_UPGRADE);
+            printf('<h2>' . $heading . '</h2>', $next);
             if ($message = $upgrader->message()) {
                 echo '<div class="well">' . $message . '</div>';
             }

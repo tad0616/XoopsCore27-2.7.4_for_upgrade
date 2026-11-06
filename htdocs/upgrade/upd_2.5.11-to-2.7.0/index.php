@@ -151,8 +151,9 @@ class Upgrade_270 extends XoopsUpgrade
             unset($_SESSION[$flagKey]);
             return true;
         }
-        $_SESSION[$flagKey] = true;
-        $this->logs[]       = sprintf('<span class="text-warning">警告：無法刪除目錄：%s(此為已無用的舊檔案，不影響升級繼續進行，升級完成後請自行手動刪除)</span>', $this->relativePath($folder));
+        $_SESSION[$flagKey]       = true;
+        $this->needsManualCleanup = true;
+        $this->logs[]             = sprintf('<span class="text-warning">警告：無法刪除目錄：%s(此為已無用的舊檔案，不影響升級繼續進行，升級完成後請自行手動刪除)</span>', $this->relativePath($folder));
         return true;
     }
 
@@ -584,6 +585,7 @@ class Upgrade_270 extends XoopsUpgrade
             }
         } else {
             $_SESSION[$this->librariesCleanupWarnedKey] = true; // warned once; queue may complete
+            $this->needsManualCleanup                   = true;
             $this->logs[]                               = '<span class="text-warning">警告：部分已無用的舊檔案無法自動刪除，不影響升級繼續進行。升級完成後，請自行手動刪除上述目錄檔案。</span>';
         }
 
@@ -604,7 +606,7 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function check_deletetinymce5nested(): bool
     {
-        return !is_dir(XOOPS_ROOT_PATH . '/class/xoopseditor/tinymce5/tinymce5/');
+        return !is_dir(XOOPS_ROOT_PATH . '/class/xoopseditor/tinymce5/tinymce5/') || !empty($_SESSION['deletetinymce5nested-warned-270']);
     }
 
     /**
@@ -614,12 +616,7 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function apply_deletetinymce5nested(): bool
     {
-        $path = XOOPS_ROOT_PATH . '/class/xoopseditor/tinymce5/tinymce5/';
-        if (!self::deleteFolder($path)) {
-            $this->logs[] = sprintf('無法刪除重複的 tinymce5 目錄：%s(此為已無用的舊檔案，請自行手動刪除)', $this->relativePath($path));
-            return false;
-        }
-        return true;
+        return $this->deleteOrWarn(XOOPS_ROOT_PATH . '/class/xoopseditor/tinymce5/tinymce5/', 'deletetinymce5nested-warned-270');
     }
 
     // =========================================================================
@@ -636,7 +633,7 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function check_deleteflashsanitizer(): bool
     {
-        return !is_dir(XOOPS_ROOT_PATH . '/class/textsanitizer/flash/');
+        return !is_dir(XOOPS_ROOT_PATH . '/class/textsanitizer/flash/') || !empty($_SESSION['deleteflashsanitizer-warned-270']);
     }
 
     /**
@@ -646,12 +643,7 @@ class Upgrade_270 extends XoopsUpgrade
      */
     public function apply_deleteflashsanitizer(): bool
     {
-        $path = XOOPS_ROOT_PATH . '/class/textsanitizer/flash/';
-        if (!self::deleteFolder($path)) {
-            $this->logs[] = sprintf('無法刪除 Flash 文字過濾目錄：%s(此為已無用的舊檔案，請自行手動刪除)', $this->relativePath($path));
-            return false;
-        }
-        return true;
+        return $this->deleteOrWarn(XOOPS_ROOT_PATH . '/class/textsanitizer/flash/', 'deleteflashsanitizer-warned-270');
     }
 
     // =========================================================================
