@@ -23,13 +23,25 @@ $obsoletePaths = [
 ];
 $rootChmod = null;
 foreach ($steps as $index => $step) {
-    if ($step['op'] === 'chmod' && $step['path'] === '{ROOT}' && !empty($step['recursive'])) {
+    if ($step['op'] === 'chmod_except' && $step['path'] === '{ROOT}' && !empty($step['recursive']) && $step['exclude'] === ['{ROOT}/uploads']) {
         $rootChmod = $index;
         break;
     }
 }
 if ($rootChmod === null) {
-    throw new RuntimeException('Recursive root chmod is missing');
+    throw new RuntimeException('Recursive root chmod must exclude uploads');
+}
+$varChmod = array_values(array_filter($steps, static fn(array $step): bool =>
+    $step['op'] === 'chmod_except' && $step['path'] === '{VAR}' && !empty($step['recursive'])
+        && $step['exclude'] === ['{ROOT}/uploads']
+));
+if (count($varChmod) !== 1) {
+    throw new RuntimeException('Recursive data chmod must exclude uploads even if data is inside uploads');
+}
+foreach ($steps as $step) {
+    if ($step['op'] === 'chmod' && $step['path'] === '{ROOT}/uploads' && !empty($step['recursive'])) {
+        throw new RuntimeException('Uploads must not be recursively chmodded');
+    }
 }
 foreach ($obsoletePaths as $path) {
     $positions = [];
