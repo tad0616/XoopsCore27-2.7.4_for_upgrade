@@ -209,7 +209,7 @@ class UpgradeControl
 
     /**
      * Examine upgrade directories and determine which patches need to run and
-     * which files need to be writable.
+     * which files need to be writable for the next pending patch.
      *
      * Each patch directory whose name contains '-to-' must contain an index.php
      * that returns the fully-qualified class name of a XoopsUpgrade subclass.
@@ -223,7 +223,6 @@ class UpgradeControl
 
         /** @var PatchStatus[] $results */
         $results           = [];
-        $files             = [];
         $this->needUpgrade = false;
 
         foreach ($dirs as $dir) {
@@ -251,27 +250,38 @@ class UpgradeControl
                     $results[$dir] = $upg->isApplied();
                     if (!($results[$dir]->applied)) {
                         $this->needUpgrade = true;
-                        if (!empty($results[$dir]->files)) {
-                            $files = array_merge($files, $results[$dir]->files);
-                        }
                     }
                 }
             }
         }
 
-        if ($this->needUpgrade && !empty($files)) {
-            foreach ($files as $k => $file) {
-                $testFile = preg_match('/^([.\/\\\\:])|([a-z]:)/i', $file) ? $file : "../{$file}";
-                if (is_writable($testFile) || !file_exists($testFile)) {
-                    unset($files[$k]);
-                }
-            }
-        }
-
-        $this->upgradeQueue    = $results;
-        $this->needWriteFiles  = $files;
+        $this->upgradeQueue = $results;
+        $this->needWriteFiles = $this->getNextPatchWriteFiles();
 
         return $this->needUpgrade;
+    }
+
+    /**
+     * Return existing, unwritable paths required by the first pending patch.
+     *
+     * @return string[]
+     */
+    public function getNextPatchWriteFiles(): array
+    {
+        foreach ($this->upgradeQueue as $patch) {
+            if ($patch->applied) {
+                continue;
+            }
+            $files = [];
+            foreach ($patch->files as $file) {
+                $testFile = preg_match('/^([.\/\\\\:])|([a-z]:)/i', $file) ? $file : XOOPS_ROOT_PATH . "/{$file}";
+                if (file_exists($testFile) && !is_writable($testFile)) {
+                    $files[] = $file;
+                }
+            }
+            return $files;
+        }
+        return [];
     }
 
     /**

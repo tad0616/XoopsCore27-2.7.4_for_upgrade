@@ -54,7 +54,6 @@ class Upgrade_2511 extends XoopsUpgrade
             // above depends on it, so every other task completes first.
             'rmindexhtml',
         ];
-        $this->usedFiles = [];
         $this->pathsToCheck = [
             XOOPS_ROOT_PATH . '/cache',
             XOOPS_ROOT_PATH . '/class',
@@ -79,13 +78,10 @@ class Upgrade_2511 extends XoopsUpgrade
         ];
         // The index.html cleanup only warns when a file cannot be deleted, so the
         // scanned code/theme directories no longer need to be writable up front.
-        // Only the directories that other tasks of this patch write to are required.
+        // The configuration migration tasks write to xoops_data, not these
+        // legacy cache, template, library or upload directories.
         $this->usedFiles = [
-            XOOPS_ROOT_PATH . '/cache',
-            XOOPS_ROOT_PATH . '/templates_c',
-            XOOPS_ROOT_PATH . '/uploads',
             XOOPS_VAR_PATH,
-            XOOPS_PATH,
         ];
     }
 
