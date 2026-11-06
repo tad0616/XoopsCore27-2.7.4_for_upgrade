@@ -8,6 +8,11 @@
     {"op": "chmod", "path": "{ROOT}/uploads", "file": "0777", "dir": "0777", "recursive": true},
     {"op": "chmod", "path": "{VAR}", "file": "0777", "dir": "0777", "recursive": true},
     {"op": "chmod", "path": "{ROOT}/mainfile.php", "mode": "0777"},
+    {"op": "delete", "path": "{ROOT}/modules/system/templates/system_imagemanager2.html"},
+    {"op": "delete", "path": "{ROOT}/modules/system/templates/system_imagemanager.html"},
+    {"op": "delete", "path": "{ROOT}/class/libraries/vendor/kint-php"},
+    {"op": "delete", "path": "{ROOT}/class/libraries/vendor/paragonie"},
+    {"op": "delete", "path": "{ROOT}/class/libraries/vendor/symfony"},
     {"op": "delete", "path": "{ROOT}/modules/system/themes/legacy"},
     {"op": "delete", "path": "{ROOT}/class/mail/phpmailer"},
     {"op": "delete", "path": "{LIB}/modules/protector/library"},
@@ -18,11 +23,6 @@
       "{ROOT}/themes/xbootstrap", "{ROOT}/themes/xswatch", "{ROOT}/themes/xswatch4", "{ROOT}/uploads",
       "{VAR}", "{LIB}"
     ]},
-    {"op": "delete", "path": "{ROOT}/modules/system/templates/system_imagemanager2.html"},
-    {"op": "delete", "path": "{ROOT}/modules/system/templates/system_imagemanager.html"},
-    {"op": "delete", "path": "{ROOT}/class/libraries/vendor/kint-php"},
-    {"op": "delete", "path": "{ROOT}/class/libraries/vendor/paragonie"},
-    {"op": "delete", "path": "{ROOT}/class/libraries/vendor/symfony"},
     {"op": "delete", "path": "{WORK}"},
     {"op": "delete", "path": "{NEW_FILE}"},
     {"op": "write", "path": "{ROOT}/uploads/xoops_sn_{SN}.txt", "content": "{NOW}"}
