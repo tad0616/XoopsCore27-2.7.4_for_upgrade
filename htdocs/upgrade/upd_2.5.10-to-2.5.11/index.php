@@ -818,13 +818,16 @@ class Upgrade_2511 extends XoopsUpgrade
      */
     public function check_zapsmarty(): bool
     {
-        return !file_exists(XOOPS_ROOT_PATH . '/class/smarty/Smarty.class.php');
+        return !file_exists(XOOPS_ROOT_PATH . '/class/smarty/Smarty.class.php') || !empty($_SESSION['zapsmarty-warned-2511']);
     }
 
     /**
      * Delete obsolete Smarty files
      *
-     * @return bool
+     * Best-effort: every item is attempted, and any that cannot be deleted are
+     * reported (in Chinese) for the admin to delete by hand, without failing the patch.
+     *
+     * @return bool always true
      */
     public function apply_zapsmarty(): bool
     {
@@ -842,29 +845,31 @@ class Upgrade_2511 extends XoopsUpgrade
             'Smarty_Compiler.class.php',
         ];
 
-        // Loop through each item and delete it
+        $failed = [];
         foreach ($itemsToDelete as $item) {
             $path = $baseDir . $item;
 
-            if (is_link($path)) {
-                if (!unlink($path)) {
-                    $this->logEscaped('Failed to delete Smarty symlink: ' . basename($path));
-
-                    return false;
+            if (is_link($path) || is_file($path)) {
+                if (!@unlink($path)) {
+                    $failed[] = $item;
                 }
             } elseif (is_dir($path)) {
                 if (!self::deleteFolder($path)) {
-                    $this->logEscaped('Failed to delete Smarty directory: ' . basename($path));
-
-                    return false;
-                }
-            } elseif (is_file($path)) {
-                if (!unlink($path)) {
-                    $this->logEscaped('Failed to delete Smarty file: ' . basename($path));
-
-                    return false;
+                    $failed[] = $item;
                 }
             }
+        }
+
+        if ([] === $failed) {
+            unset($_SESSION['zapsmarty-warned-2511']);
+            return true;
+        }
+
+        $_SESSION['zapsmarty-warned-2511'] = true;
+        $this->needsManualCleanup          = true;
+        $this->logEscaped('警告：下列已無用的舊 Smarty 檔案無法自動刪除，不影響升級繼續進行。升級完成後，請自行手動刪除：');
+        foreach ($failed as $item) {
+            $this->logEscaped('  class/smarty/' . $item);
         }
 
         return true;
