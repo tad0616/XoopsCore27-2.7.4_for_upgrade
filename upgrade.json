@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "steps": [
+    {"op": "copy", "from": "{WORK}/htdocs/", "to": "{ROOT}/"},
+    {"op": "copy", "from": "{WORK}/xoops_data/", "to": "{VAR}/"},
+    {"op": "copy", "from": "{WORK}/xoops_lib/", "to": "{LIB}/"},
+    {"op": "chmod", "path": "{ROOT}", "file": "0755", "dir": "0755", "recursive": true},
+    {"op": "chmod", "path": "{ROOT}/uploads", "file": "0777", "dir": "0777", "recursive": true},
+    {"op": "chmod", "path": "{VAR}", "file": "0777", "dir": "0777", "recursive": true},
+    {"op": "chmod", "path": "{ROOT}/mainfile.php", "mode": "0777"},
+    {"op": "delete", "path": "{ROOT}/modules/system/themes/legacy"},
+    {"op": "delete", "path": "{WORK}"},
+    {"op": "delete", "path": "{NEW_FILE}"},
+    {"op": "write", "path": "{ROOT}/uploads/xoops_sn_{SN}.txt", "content": "{NOW}"}
+  ]
+}
