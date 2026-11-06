@@ -1,9 +1,9 @@
 {
   "version": 1,
   "steps": [
-    {"op": "copy", "from": "{WORK}/htdocs/", "to": "{ROOT}/"},
-    {"op": "copy", "from": "{WORK}/xoops_data/", "to": "{VAR}/"},
     {"op": "copy", "from": "{WORK}/xoops_lib/", "to": "{LIB}/"},
+    {"op": "copy", "from": "{WORK}/xoops_data/", "to": "{VAR}/"},
+    {"op": "copy", "from": "{WORK}/htdocs/", "to": "{ROOT}/"},
     {"op": "chmod", "path": "{ROOT}", "file": "0755", "dir": "0755", "recursive": true},
     {"op": "chmod", "path": "{ROOT}/uploads", "file": "0777", "dir": "0777", "recursive": true},
     {"op": "chmod", "path": "{VAR}", "file": "0777", "dir": "0777", "recursive": true},
